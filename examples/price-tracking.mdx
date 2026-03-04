@@ -1,0 +1,246 @@
+---
+title: 'Price Tracking Example'
+description: 'Complete workflow for generating interactive price charts'
+---
+
+## Overview
+
+This example shows the complete workflow for generating an interactive price chart for a Polymarket outcome. You'll learn how to:
+
+- Get the condition ID from event or market data
+- Resolve decimal CLOB token IDs
+- Generate an interactive HTML chart with multiple time windows
+- Interpret the chart output
+
+## The Complete Workflow
+
+### Step 1: Get Market Data
+
+First, look up the market to get its `conditionId`:
+
+```bash
+polymarket -o json markets get will-donald-trump-win-2024-presidential-election
+```
+
+**Sample Output:**
+
+```json
+{
+  "id": "0x1a2b3c...",
+  "question": "Will Donald Trump win the 2024 Presidential Election?",
+  "slug": "will-donald-trump-win-2024-presidential-election",
+  "conditionId": "0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75",
+  "outcomePrices": "[\"0.62\",\"0.38\"]",
+  "volume": "125678945.50",
+  "liquidity": "2456789.30"
+}
+```
+
+Note the `conditionId` - you'll need it for the next step.
+
+### Step 2: Get Decimal Token IDs
+
+Use the condition ID to get CLOB token IDs:
+
+```bash
+polymarket -o json clob market 0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75
+```
+
+**Sample Output:**
+
+```json
+{
+  "condition_id": "0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75",
+  "question": "Will Donald Trump win the 2024 Presidential Election?",
+  "tokens": [
+    {
+      "outcome": "Yes",
+      "token_id": "112316675672867877229468146022183048437257321327356290821423031835271507345171",
+      "winner": false
+    },
+    {
+      "outcome": "No",
+      "token_id": "112316675672867877229468146022183048437257321327356290821423031835271507345172",
+      "winner": false
+    }
+  ],
+  "minimum_order_size": 1.0,
+  "minimum_tick_size": 0.01
+}
+```
+
+<Warning>
+You **must** use the decimal `token_id` value, not the hex condition ID. The chart script requires decimal token IDs.
+</Warning>
+
+### Step 3: Generate the Chart
+
+Now generate an interactive chart for the YES outcome:
+
+```bash
+python3 scripts/chart.py 112316675672867877229468146022183048437257321327356290821423031835271507345171 --title "Trump 2024 Election YES"
+```
+
+**What Happens:**
+
+1. The script fetches recent high-resolution price data
+2. It fetches the full historical timeline (with `--fidelity 5000`)
+3. It merges both datasets for complete coverage
+4. It generates an HTML file with an interactive Plotly chart
+5. It automatically opens the chart in your default browser
+
+**Console Output:**
+
+```
+Fetching price history for token 112316675672867877229468146022183048437257321327356290821423031835271507345171...
+Fetched 1,247 recent data points
+Fetching full history with high fidelity...
+Fetched 4,892 historical data points
+Merged into 5,234 total data points
+Chart saved to: /tmp/polymarket_chart_112316675672867877229468146022183048437257321327356290821423031835271507345171.html
+Opening chart in browser...
+```
+
+<Tip>
+If the browser doesn't open automatically, manually open the printed file path.
+</Tip>
+
+### Step 4: Explore the Interactive Chart
+
+The generated chart includes:
+
+**Time Window Tabs:**
+- **1H** - Last hour
+- **6H** - Last 6 hours
+- **1D** - Last 24 hours
+- **1W** - Last week (default view)
+- **1M** - Last month
+- **3M** - Last 3 months
+- **6M** - Last 6 months
+- **All** - Complete history
+
+**Interactive Features:**
+- Hover over points to see exact price and timestamp
+- Zoom by clicking and dragging
+- Pan by holding shift and dragging
+- Reset view with the home icon
+- Download chart as PNG
+
+## Using the Installed Skill Path
+
+If you installed the Polymarket skill via Codex, use the full path:
+
+```bash
+python3 ~/.codex/skills/polymarket/scripts/chart.py <TOKEN_ID> --title "Market Name YES"
+```
+
+## Multi-Outcome Event Example
+
+For events with multiple outcomes (e.g., "Democratic Presidential Nominee 2028"), chart each outcome separately:
+
+```bash Step 1: Get event data
+polymarket -o json events get democratic-presidential-nominee-2028 > event.json
+```
+
+```bash Step 2: Extract a condition ID
+# From the event JSON, pick one outcome's conditionId
+# Example: Gavin Newsom outcome
+polymarket -o json clob market 0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75
+```
+
+```bash Step 3: Chart YES outcome
+python3 scripts/chart.py <NEWSOM_YES_TOKEN_ID> --title "Newsom 2028 Dem Nom YES"
+```
+
+```bash Step 4: Chart NO outcome (optional)
+python3 scripts/chart.py <NEWSOM_NO_TOKEN_ID> --title "Newsom 2028 Dem Nom NO"
+```
+
+## Converting Hex to Decimal
+
+If you only have a hex token ID (e.g., from a smart contract), convert it:
+
+```bash
+python3 -c "print(int('0xYOUR_HEX_HERE', 16))"
+```
+
+**Example:**
+
+```bash
+python3 -c "print(int('0xf8e1d2c3b4a5968778695a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3', 16))"
+# Output: 112316675672867877229468146022183048437257321327356290821423031835271507345171
+```
+
+## Troubleshooting
+
+### "No price history returned"
+
+<Warning>
+This error means the token ID is invalid or not recognized by the CLOB API.
+
+**Common causes:**
+- Using hex `0x...` format instead of decimal
+- Using the condition ID instead of token ID
+- Typo in the token ID
+
+**Solution:** Verify you're using the decimal `token_id` from `clob market` output.
+</Warning>
+
+### Browser doesn't open
+
+If the chart doesn't open automatically:
+
+1. Look for the file path in the console output
+2. Manually open the `.html` file in any browser
+3. The file is saved in `/tmp/` by default
+
+### Chart shows no data for recent time windows
+
+For newly created markets:
+
+- Recent time windows (1H, 6H) may be empty
+- Switch to longer windows (1W, 1M, All)
+- Markets need trading activity to generate price history
+
+## Advanced: Comparing Multiple Outcomes
+
+To compare outcomes side-by-side:
+
+1. Generate separate charts for each outcome
+2. Open them in different browser tabs
+3. Use the same time window in each tab
+4. Manually compare price movements
+
+<Note>
+Future versions may support multi-line charts. For now, generate separate charts per outcome.
+</Note>
+
+## What the Chart Shows
+
+The Y-axis represents the **price** (probability) from $0.00 to $1.00:
+
+- **$0.50** = 50% implied probability
+- **$0.75** = 75% implied probability
+- **$0.95** = 95% implied probability
+
+The X-axis shows time with automatic formatting based on the selected window.
+
+**Price movements indicate:**
+- Sharp increases = New information favoring YES
+- Gradual trends = Sustained sentiment shift
+- Volatility = Uncertainty or breaking news
+- Flat lines = Low trading activity or consensus
+
+## Next Steps
+
+After generating charts:
+
+1. **Analyze holder positions** - See who's betting at different price levels
+2. **Track wallet activity** - Monitor specific traders' entries and exits
+3. **Compare with events** - Correlate price spikes with news events
+
+## Related Commands
+
+- [Event Lookup](/examples/event-lookup) - Get condition IDs from events
+- [Market Research](/examples/market-research) - Find markets to chart
+- [CLI Reference](/cli/clob) - Full CLOB command documentation

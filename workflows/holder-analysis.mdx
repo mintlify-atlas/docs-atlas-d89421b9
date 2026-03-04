@@ -1,0 +1,297 @@
+---
+title: Holder Analysis
+description: Find top YES and NO holders and interpret outcome indices
+---
+
+## Overview
+
+Use the `data holders` command to discover the largest positions in a market. This workflow explains how to fetch holder data, interpret `outcome_index`, and filter for meaningful traders.
+
+## Prerequisites
+
+- `polymarket` CLI installed
+- A market's `condition_id` (get from event or market lookup)
+
+## Workflow
+
+<Steps>
+  <Step title="Get the condition ID">
+    Find the `conditionId` for your target market:
+
+    ```bash
+    polymarket -o json events get <slug>
+    ```
+
+    Or for a single binary market:
+
+    ```bash
+    polymarket -o json markets get <slug>
+    ```
+
+    Extract the `conditionId` field from the output.
+  </Step>
+
+  <Step title="Fetch top holders">
+    Run the holders query:
+
+    ```bash
+    polymarket -o json data holders <CONDITION_ID>
+    ```
+
+    Example:
+
+    ```bash
+    polymarket -o json data holders 0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75
+    ```
+
+    This returns an array of holder objects sorted by position size (largest first):
+
+    ```json
+    [
+      {
+        "wallet": "0xa5Ef39C3D3e10d0B270233af41CaC69796B12966",
+        "outcome_index": 0,
+        "size": "11900000000",
+        "avg_price": "0"
+      },
+      {
+        "wallet": "0x9876543210abcdef9876543210abcdef98765432",
+        "outcome_index": 1,
+        "size": "4500000",
+        "avg_price": "0.72"
+      }
+    ]
+    ```
+  </Step>
+
+  <Step title="Interpret outcome_index">
+    The `outcome_index` field tells you which outcome the wallet holds:
+
+    - **`outcome_index: 0`** = YES holders
+    - **`outcome_index: 1`** = NO holders
+
+    <Note>
+      This is a zero-based index into the `tokens` array returned by `polymarket clob market <CONDITION_ID>`. The first token (index 0) is always YES; the second (index 1) is always NO.
+    </Note>
+
+    To separate YES and NO holders:
+
+    ```python
+    yes_holders = [h for h in holders if h["outcome_index"] == 0]
+    no_holders = [h for h in holders if h["outcome_index"] == 1]
+    ```
+  </Step>
+
+  <Step title="Analyze position sizes and entry prices">
+    For each holder, you get:
+
+    - **`size`**: Total shares held (decimal string)
+    - **`avg_price`**: Average entry price across all purchases (0-1 range)
+
+    Calculate position value:
+
+    ```python
+    current_price = 0.28  # From market data
+    shares = float(holder["size"])
+    avg_entry = float(holder["avg_price"])
+
+    cost_basis = shares * avg_entry
+    current_value = shares * current_price
+    unrealized_pnl = current_value - cost_basis
+    ```
+  </Step>
+</Steps>
+
+## Understanding `outcome_index`
+
+The `outcome_index` is a **zero-based array index** that maps to the outcome tokens:
+
+| `outcome_index` | Outcome | Token Position |
+|-----------------|---------|----------------|
+| `0` | YES | `tokens[0]` |
+| `1` | NO | `tokens[1]` |
+
+You can verify this by cross-referencing with the CLOB market data:
+
+```bash
+polymarket -o json clob market <CONDITION_ID>
+```
+
+Output:
+
+```json
+{
+  "tokens": [
+    {"outcome": "Yes", "token_id": "21742633143..."},
+    {"outcome": "No", "token_id": "21742633144..."}
+  ]
+}
+```
+
+The first token (`tokens[0]`) is YES → `outcome_index: 0`.
+The second token (`tokens[1]`) is NO → `outcome_index: 1`.
+
+## Filtering for Active Traders
+
+Not all top holders are directional traders. Use these filters to exclude infrastructure wallets:
+
+<Steps>
+  <Step title="Filter by avg_price > 0">
+    Infrastructure wallets show `"avg_price": "0"` because they mint tokens via CTF splits (not purchases):
+
+    ```python
+    traders = [h for h in holders if float(h["avg_price"]) > 0]
+    ```
+  </Step>
+
+  <Step title="Check for trade history">
+    Verify the wallet has actual trades:
+
+    ```bash
+    polymarket -o json data trades <WALLET> --limit 10
+    ```
+
+    If it returns `[]`, the wallet is likely infrastructure.
+  </Step>
+
+  <Step title="Exclude known infrastructure addresses">
+    Polymarket's neg-risk escrow contract:
+
+    ```python
+    INFRA_WALLETS = [
+        "0xa5Ef39C3D3e10d0B270233af41CaC69796B12966",  # Neg-risk escrow
+    ]
+
+    traders = [h for h in holders if h["wallet"] not in INFRA_WALLETS]
+    ```
+  </Step>
+</Steps>
+
+## Tips
+
+<Tip>
+  **Sort by position size**: The API returns holders sorted by `size` (largest first). The first few entries are often infrastructure or market makers.
+</Tip>
+
+<Tip>
+  **Compare YES vs NO holder counts**: If one side has far more unique holders, it may signal retail vs. whale dynamics.
+
+  ```python
+  print(f"YES holders: {len(yes_holders)}")
+  print(f"NO holders: {len(no_holders)}")
+  ```
+</Tip>
+
+<Tip>
+  **Find conviction trades**: High `avg_price` on YES holders (e.g., `0.80+`) indicates they bought in at expensive levels, suggesting strong conviction.
+</Tip>
+
+## Example: Find Top 5 Active YES Traders
+
+```bash
+# 1. Fetch all holders
+polymarket -o json data holders 0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75 > holders.json
+
+# 2. Filter in code (Python example)
+import json
+
+with open("holders.json") as f:
+    holders = json.load(f)
+
+# Filter for YES holders with avg_price > 0 (active traders)
+yes_traders = [
+    h for h in holders
+    if h["outcome_index"] == 0 and float(h["avg_price"]) > 0
+]
+
+# Sort by size (already sorted, but explicit for clarity)
+yes_traders.sort(key=lambda h: float(h["size"]), reverse=True)
+
+# Top 5
+for trader in yes_traders[:5]:
+    print(f"Wallet: {trader['wallet']}")
+    print(f"  Size: {trader['size']} shares")
+    print(f"  Avg Entry: {float(trader['avg_price']):.4f}")
+    print()
+```
+
+Output:
+
+```
+Wallet: 0x9876543210abcdef9876543210abcdef98765432
+  Size: 4500000 shares
+  Avg Entry: 0.7200
+
+Wallet: 0xabcdefabcdefabcdefabcdefabcdefabcdefabcd
+  Size: 3200000 shares
+  Avg Entry: 0.6100
+...
+```
+
+## Common Patterns
+
+### Infrastructure Wallet (Exclude)
+
+```json
+{
+  "wallet": "0xa5Ef39C3D3e10d0B270233af41CaC69796B12966",
+  "outcome_index": 0,
+  "size": "11900000000",
+  "avg_price": "0"
+}
+```
+
+- Massive position
+- Zero entry price
+- This is Polymarket's escrow contract
+
+### Active Trader (Include)
+
+```json
+{
+  "wallet": "0x9876543210abcdef9876543210abcdef98765432",
+  "outcome_index": 1,
+  "size": "4500000",
+  "avg_price": "0.72"
+}
+```
+
+- Non-zero entry price
+- Reasonable position size
+- Likely a directional NO bet
+
+### Market Maker (Context-Dependent)
+
+```json
+{
+  "wallet": "0x1111111111111111111111111111111111111111",
+  "outcome_index": 0,
+  "size": "8000000",
+  "avg_price": "0.50"
+}
+```
+
+- Entry price near 50% suggests neutral positioning
+- Check if the same wallet holds large NO shares too
+- May be providing liquidity, not taking a directional bet
+
+## Caveats
+
+<Warning>
+  **Holder data is a snapshot**. Wallets can exit or add to positions after you fetch the data. For real-time analysis, re-query periodically.
+</Warning>
+
+<Warning>
+  **Open interest ≠ total YES shares × $1** in neg-risk markets. OI is current-value-weighted. Use the `data open-interest` command for accurate totals.
+</Warning>
+
+<Warning>
+  **Privacy wallets and aggregators** may obscure the true holder. A single address could represent multiple users (e.g., a betting pool or smart contract vault).
+</Warning>
+
+## Next Steps
+
+After identifying top holders, dive deeper with:
+
+- [Wallet Analysis](/workflows/wallet-analysis) – Compute cost basis and ROI for a specific holder
+- [Cost Basis](/workflows/cost-basis) – Detailed ROI calculations and win payout scenarios

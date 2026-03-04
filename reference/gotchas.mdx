@@ -1,0 +1,235 @@
+---
+title: Critical Gotchas
+description: Common pitfalls and their solutions when working with the Polymarket CLI
+---
+
+This page documents critical gotchas that can cause errors or unexpected behavior when using the Polymarket CLI.
+
+## Wrong Command Returns 404
+
+**Problem:** You get a 404 error when looking up an event or market.
+
+**Cause:** Using the wrong command namespace for the resource type.
+
+**Solution:** The URL path tells you which command to use:
+
+- URL contains `/event/` → use `polymarket events get <slug>`
+- URL contains `/market/` → use `polymarket markets get <slug>`
+
+**Examples:**
+
+```bash
+# Event URL: https://polymarket.com/event/democratic-presidential-nominee-2028
+polymarket events get democratic-presidential-nominee-2028  # ✓ Correct
+polymarket markets get democratic-presidential-nominee-2028  # ✗ Returns 404
+
+# Market URL: https://polymarket.com/market/will-biden-run-in-2024
+polymarket markets get will-biden-run-in-2024  # ✓ Correct
+polymarket events get will-biden-run-in-2024   # ✗ Returns 404
+```
+
+**Ambiguous slugs:** If you have a slug without a URL, try `events get` first. If that returns a 404, fall back to `markets get`.
+
+## outcomePrices is a JSON String
+
+**Problem:** Trying to access price data from event output fails or shows garbled text.
+
+**Cause:** The `outcomePrices` field in event data is a JSON-encoded **string**, not a parsed object.
+
+**Solution:** Parse it with `json.loads()` in Python or equivalent in other languages.
+
+**Example:**
+
+```python
+import json
+import subprocess
+
+# Get event data
+result = subprocess.run(
+    ['polymarket', '-o', 'json', 'events', 'get', 'event-slug'],
+    capture_output=True, text=True
+)
+event_data = json.loads(result.stdout)
+
+# Parse outcomePrices string
+outcome_prices = json.loads(event_data['outcomePrices'])  # Parse the string!
+
+print(outcome_prices)  # Now you can access the price data
+```
+
+**Without parsing:**
+```python
+print(event_data['outcomePrices'])  # '{"YES": 0.52, "NO": 0.48}' (string)
+```
+
+**After parsing:**
+```python
+prices = json.loads(event_data['outcomePrices'])
+print(prices['YES'])  # 0.52 (number)
+```
+
+## Token IDs Must Be Decimal
+
+**Problem:** CLOB commands fail or return no data when using token IDs.
+
+**Cause:** You're using hex format (`0x...`) instead of decimal integers.
+
+**Solution:** Always get token IDs from `polymarket clob market <CONDITION_ID>`, which returns decimal values.
+
+**Correct workflow:**
+
+```bash
+# 1. Get CLOB market data with condition ID
+polymarket -o json clob market 0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75
+
+# Output includes:
+# {
+#   "tokens": [
+#     {"token_id": "123456789012345678", "outcome": "YES"},
+#     {"token_id": "123456789012345679", "outcome": "NO"}
+#   ]
+# }
+
+# 2. Use the decimal token_id (not hex!)
+polymarket clob price-history --interval max 123456789012345678  # ✓
+polymarket clob price-history --interval max 0x1a2b3c4d5e6f7890  # ✗
+```
+
+**Manual conversion (if needed):**
+
+```bash
+python3 -c "print(int('0x1a2b3c4d5e6f7890', 16))"
+```
+
+However, you should always use the decimal `token_id` from `clob market` rather than converting manually.
+
+## Order Parameter Uses camelCase
+
+**Problem:** Getting 422 errors when searching markets with `--order`.
+
+**Cause:** Using snake_case instead of camelCase for the order parameter.
+
+**Solution:** Use camelCase for all order values.
+
+**Examples:**
+
+```bash
+# Correct (camelCase)
+polymarket markets search "election" --order volumeNum  # ✓
+polymarket markets search "election" --order liquidityNum  # ✓
+
+# Incorrect (snake_case)
+polymarket markets search "election" --order volume_num  # ✗ 422 error
+polymarket markets search "election" --order liquidity_num  # ✗ 422 error
+```
+
+**Common order values:**
+- `volumeNum` - Sort by trading volume
+- `liquidityNum` - Sort by liquidity
+- `endDate` - Sort by market end date
+
+## Open Interest ≠ Face Value
+
+**Problem:** Open interest calculations don't match expectations.
+
+**Cause:** In neg-risk markets, open interest is weighted by current value, not face value.
+
+**Explanation:**
+
+You might expect: `Open Interest = YES_tokens × $1.00`
+
+But in neg-risk markets: `Open Interest = YES_tokens × current_YES_price + NO_tokens × current_NO_price`
+
+**Example:**
+
+```
+Market: 1,000,000 YES tokens at $0.52, 1,000,000 NO tokens at $0.48
+
+Expected (face value): 1,000,000 × $1.00 = $1,000,000
+Actual (neg-risk):     (1,000,000 × $0.52) + (1,000,000 × $0.48) = $1,000,000
+```
+
+In this case they're equal, but if prices diverge:
+
+```
+Market: 1,000,000 YES tokens at $0.90, 500,000 NO tokens at $0.11
+
+Face value would be: 1,000,000 × $1.00 = $1,000,000
+Actual OI:           (1,000,000 × $0.90) + (500,000 × $0.11) = $955,000
+```
+
+<Note>
+This is not an error in the CLI or API—it's how neg-risk markets calculate open interest.
+</Note>
+
+## markets list Sorts Ascending
+
+**Problem:** Can't find high-volume markets using `markets list`.
+
+**Cause:** The `markets list` command always sorts in ascending order, putting lowest-volume markets first.
+
+**Solution:** Use `markets search` instead, which supports `--order` to sort by volume descending.
+
+**Comparison:**
+
+```bash
+# This gives you the LOWEST volume markets (not useful)
+polymarket markets list --limit 20  # ✗
+
+# This gives you the HIGHEST volume markets
+polymarket markets search "" --order volumeNum --limit 20  # ✓
+```
+
+Use an empty search string `""` with `markets search` to effectively list all markets with custom ordering.
+
+## Sum of YES Prices ≈ 1.01
+
+**Problem:** Outcome prices sum to slightly more than $1.00.
+
+**Cause:** This is normal—it's the 1% house vig (vigorish/fee).
+
+**Example:**
+
+```json
+{
+  "YES": 0.52,
+  "NO": 0.49
+}
+// Sum: 0.52 + 0.49 = 1.01
+```
+
+The ~1% spread is how Polymarket makes money on trades. It's not an error or data quality issue.
+
+**Expected range:** Sum of all outcome prices typically ranges from 1.00 to 1.02.
+
+## No Top-Level get Command
+
+**Problem:** Running `polymarket get <slug>` fails.
+
+**Cause:** There is no top-level `get` command.
+
+**Solution:** Always use namespaced commands:
+
+```bash
+# Incorrect
+polymarket get my-market-slug  # ✗ Command not found
+
+# Correct
+polymarket events get my-event-slug   # ✓
+polymarket markets get my-market-slug  # ✓
+```
+
+All commands are namespaced under `events`, `markets`, `clob`, or `data`.
+
+## Summary Table
+
+| Gotcha | Detail |
+|--------|--------|
+| Wrong command → 404 | URL path is the signal: `/event/` vs `/market/` |
+| `outcomePrices` is a JSON string | Must `json.loads()` to parse prices from event data |
+| Token IDs must be decimal | NOT hex `0x...`. Use `polymarket clob market <CONDITION_ID>` |
+| `--order` is camelCase | `volumeNum` works; `volume_num` causes 422 error |
+| Open Interest ≠ face value | In neg-risk markets, OI is current-value-weighted, not YES_tokens × $1 |
+| `markets list` is ascending | Use `markets search` to get high-volume markets first |
+| Sum of YES prices ≈ 1.01 | Normal—1% house vig. Not an error. |
+| No top-level `get` | Always namespaced: `markets get`, `events get`, etc. |

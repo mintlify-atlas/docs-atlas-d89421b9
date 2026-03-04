@@ -1,0 +1,140 @@
+---
+title: 'Event Lookup Example'
+description: 'Complete walkthrough of looking up a Polymarket event and parsing outcome prices'
+---
+
+## Overview
+
+This example shows how to retrieve event metadata and all outcome markets from a Polymarket event page. You'll learn how to:
+
+- Look up an event using its slug
+- Parse the event response structure
+- Access outcome markets and their prices
+- Handle the `outcomePrices` JSON string correctly
+
+## The Command
+
+Let's look up the "Democratic Presidential Nominee 2028" event:
+
+```bash
+polymarket -o json events get democratic-presidential-nominee-2028
+```
+
+<Note>
+The slug comes from the URL: `https://polymarket.com/event/democratic-presidential-nominee-2028`
+</Note>
+
+## Sample Output
+
+```json
+{
+  "id": "0x9a2b8c...",
+  "slug": "democratic-presidential-nominee-2028",
+  "title": "Democratic Presidential Nominee 2028",
+  "description": "This market will resolve to the Democratic Party nominee...",
+  "startDate": "2024-11-06T00:00:00Z",
+  "endDate": "2028-08-15T00:00:00Z",
+  "status": "active",
+  "markets": [
+    {
+      "id": "0x1a2b3c...",
+      "question": "Gavin Newsom",
+      "conditionId": "0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75",
+      "slug": "gavin-newsom-democratic-nominee-2028",
+      "outcomePrices": "[\"0.12\",\"0.88\"]",
+      "volume": "1245678.50",
+      "liquidity": "45678.90"
+    },
+    {
+      "id": "0x2b3c4d...",
+      "question": "Gretchen Whitmer",
+      "conditionId": "0x1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t1u2v3w4x5y6z7a8b9c0d1e2f",
+      "slug": "gretchen-whitmer-democratic-nominee-2028",
+      "outcomePrices": "[\"0.08\",\"0.92\"]",
+      "volume": "987654.30",
+      "liquidity": "32145.60"
+    }
+  ]
+}
+```
+
+## What to Look For
+
+### Top-Level Event Metadata
+
+- **title**: The event name displayed on Polymarket
+- **status**: `active`, `closed`, or `resolved`
+- **startDate** and **endDate**: When the event opened and when it closes
+
+### Markets Array
+
+The `markets` array contains all outcome markets for this event. Each outcome has:
+
+- **question**: The outcome option (e.g., "Gavin Newsom")
+- **conditionId**: Required for looking up holders, CLOB data, and token IDs
+- **slug**: Used for direct market lookup with `markets get`
+- **outcomePrices**: Current YES/NO prices (see parsing below)
+- **volume**: Total trading volume in USDC
+
+### Parsing Outcome Prices
+
+<Warning>
+The `outcomePrices` field is a **JSON-encoded string**, not a native array. You must parse it before use.
+</Warning>
+
+In Python:
+
+```python
+import json
+
+# Assume 'market' is one item from the markets array
+prices = json.loads(market['outcomePrices'])
+yes_price = float(prices[0])  # 0.12
+no_price = float(prices[1])   # 0.88
+
+print(f"YES: ${yes_price:.2f}")
+print(f"NO: ${no_price:.2f}")
+```
+
+In JavaScript:
+
+```javascript
+const prices = JSON.parse(market.outcomePrices);
+const yesPrice = parseFloat(prices[0]);  // 0.12
+const noPrice = parseFloat(prices[1]);   // 0.88
+
+console.log(`YES: $${yesPrice.toFixed(2)}`);
+console.log(`NO: $${noPrice.toFixed(2)}`);
+```
+
+## Common Mistake
+
+<Warning>
+Using `markets get` with an event slug returns a 404 error:
+
+```bash
+# ❌ This will fail
+polymarket markets get democratic-presidential-nominee-2028
+# Error: Market not found (404)
+
+# ✅ Use this instead
+polymarket events get democratic-presidential-nominee-2028
+```
+</Warning>
+
+The URL path tells you which command to use:
+- `/event/` → `events get`
+- `/market/` → `markets get`
+
+## Next Steps
+
+Now that you have the event data, you can:
+
+1. **Generate price charts** - Use the `conditionId` to get token IDs, then create charts (see [Price Tracking](/examples/price-tracking))
+2. **Find top holders** - Run `polymarket data holders <CONDITION_ID>` for any outcome
+3. **Look up individual markets** - Use the outcome `slug` with `markets get` for detailed market data
+
+## Related Commands
+
+- [Market Research](/examples/market-research) - Search and filter markets by volume
+- [Price Tracking](/examples/price-tracking) - Generate interactive price charts

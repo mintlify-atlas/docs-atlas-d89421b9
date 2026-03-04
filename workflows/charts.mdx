@@ -1,0 +1,184 @@
+---
+title: Generate Price Charts
+description: Create interactive price charts from condition ID to chart visualization
+---
+
+## Overview
+
+Generate interactive Plotly price charts with multiple time-window views. The `chart.py` script creates a self-contained HTML file with 8 time ranges (1H, 6H, 1D, 1W, 1M, 3M, 6M, All) and opens it in your browser.
+
+## Prerequisites
+
+- Python 3.9+
+- `polymarket` CLI installed and on PATH
+- A web browser available locally
+
+## Workflow
+
+<Steps>
+  <Step title="Get the condition ID">
+    Start with the market's `condition_id` from event or market data:
+
+    ```bash
+    polymarket -o json events get <slug>
+    ```
+
+    Each market in the `markets` array contains a `conditionId` field.
+  </Step>
+
+  <Step title="Resolve decimal token ID">
+    The CLOB API requires decimal token IDs (not hex). Convert the condition ID:
+
+    ```bash
+    polymarket -o json clob market <CONDITION_ID>
+    ```
+
+    This returns a `tokens` array:
+
+    ```json
+    {
+      "tokens": [
+        {"outcome": "Yes", "token_id": "21742633143463906290569050155826241533067272736897614950488156847949938836455"},
+        {"outcome": "No", "token_id": "21742633143463906290569050155826241533067272736897614950488156847949938836456"}
+      ]
+    }
+    ```
+
+    Pick the `token_id` for the YES or NO outcome you want to chart.
+
+    <Warning>
+      Token IDs must be **decimal integers**, not hex `0x...` addresses. If you have a hex token ID, convert it:
+
+      ```bash
+      python3 -c "print(int('0xYOUR_HEX_HERE', 16))"
+      ```
+    </Warning>
+  </Step>
+
+  <Step title="Generate the chart">
+    Run the chart script with the decimal token ID:
+
+    ```bash
+    python3 scripts/chart.py <DECIMAL_TOKEN_ID> --title "Market Name YES"
+    ```
+
+    Example:
+
+    ```bash
+    python3 scripts/chart.py 21742633143463906290569050155826241533067272736897614950488156847949938836455 --title "Gavin Newsom YES"
+    ```
+
+    The script will:
+    1. Fetch high-resolution recent price data
+    2. Fetch full historical data with `--fidelity 5000`
+    3. Merge the two datasets (recent high-res + historical low-res)
+    4. Generate a dark-themed HTML file
+    5. Open it in your default browser
+  </Step>
+
+  <Step title="Interact with the chart">
+    The chart opens with a 1-week (1W) view by default. Click any tab to change the time window:
+
+    - **1H**: Last hour
+    - **6H**: Last 6 hours
+    - **1D**: Last 24 hours
+    - **1W**: Last week (default)
+    - **1M**: Last 30 days
+    - **3M**: Last 90 days
+    - **6M**: Last 180 days
+    - **All**: Full history
+
+    If a time window contains no data, it automatically falls back to "All".
+  </Step>
+</Steps>
+
+## How the Script Works
+
+### Two-Stage Fetch Strategy
+
+The script fetches price history twice to optimize data resolution:
+
+1. **High-resolution recent data**: `polymarket clob price-history --interval max <TOKEN_ID>` (scripts/chart.py:250)
+2. **Full history with reduced fidelity**: Same command with `--fidelity 5000` flag (scripts/chart.py:254)
+
+This gives you:
+- Dense data points for recent price action
+- Sparse but complete historical backdrop
+
+### Merge Logic
+
+The `merge_histories()` function (scripts/chart.py:58-95):
+1. Finds the earliest timestamp in the high-res dataset
+2. Takes all full-history points **before** that cutoff
+3. Appends all high-res points
+4. Sorts by timestamp
+
+This avoids duplicate points in the overlap region.
+
+### Chart Rendering
+
+The `generate_html()` function (scripts/chart.py:98-230) creates a self-contained HTML page using:
+- **Plotly.js 2.32.0** from CDN
+- **Dark theme**: GitHub-style `#0d1117` background
+- **Area fill**: Blue gradient under the price line
+- **Y-axis**: Fixed 0-1.0 range formatted as percentages (e.g., 26.4%)
+- **Interactive tabs**: JavaScript-driven time-window filtering
+
+### Output File
+
+The chart is saved to a temporary file:
+
+```
+/tmp/polymarket_chart_XXXXXX.html
+```
+
+The script prints the full path. If your browser doesn't auto-open, copy the path and open it manually.
+
+## Tips
+
+<Tip>
+  Use descriptive `--title` values to distinguish between YES/NO charts when you generate both outcomes:
+
+  ```bash
+  python3 scripts/chart.py <YES_TOKEN_ID> --title "Newsom YES"
+  python3 scripts/chart.py <NO_TOKEN_ID> --title "Newsom NO"
+  ```
+</Tip>
+
+<Tip>
+  The chart file is written to `/tmp` and may be cleaned up by your system. Save it elsewhere if you need to keep it:
+
+  ```bash
+  cp /tmp/polymarket_chart_*.html ~/my_charts/
+  ```
+</Tip>
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| `polymarket: command not found` | Install the CLI: `brew install polymarket` (macOS/Linux) |
+| `Error: No price history returned` | Verify the token ID is decimal and valid. Re-run `clob market` to confirm. |
+| Browser doesn't open | Open the printed file path manually in any browser |
+| Empty chart or "No data" | The token ID may be invalid or have no trading history |
+| Chart shows only a few points | The market may be newly created. Use "All" time window. |
+
+## Example: Full Workflow
+
+```bash
+# 1. Get event data
+polymarket -o json events get democratic-presidential-nominee-2028
+
+# 2. Extract conditionId for "Gavin Newsom" market from the output
+# Example: 0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75
+
+# 3. Get decimal token IDs
+polymarket -o json clob market 0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75
+
+# 4. Copy the YES token_id from output (long decimal number)
+
+# 5. Generate chart
+python3 scripts/chart.py 21742633143463906290569050155826241533067272736897614950488156847949938836455 --title "Gavin Newsom YES"
+```
+
+Your chart opens in the browser with interactive time controls and hover tooltips showing exact timestamps and prices.

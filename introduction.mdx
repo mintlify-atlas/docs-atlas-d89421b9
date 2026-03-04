@@ -1,0 +1,94 @@
+---
+title: Introduction
+description: Learn about the Polymarket CLI Research Tool and how it helps you research prediction markets
+---
+
+The Polymarket CLI Research Tool is an unofficial read-only command-line interface for researching Polymarket prediction markets. It provides comprehensive event and market lookup, price history analysis, holder tracking, and wallet analysis capabilities.
+
+## What it does
+
+The tool enables you to:
+
+- Look up Polymarket events and their outcome markets
+- Look up individual binary YES/NO markets
+- Convert from `condition_id` to decimal CLOB `token_id` for API queries
+- Generate interactive HTML price charts with multiple time-window views
+- Find top YES/NO holders for any market
+- Analyze wallet trading activity for cost-basis calculations
+- Search markets by volume and other criteria
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Event & market lookup" icon="search">
+    Retrieve detailed metadata, outcome markets, condition IDs, and current prices for any event or market
+  </Card>
+  <Card title="Interactive price charts" icon="chart-line">
+    Generate HTML charts with 8 time-window tabs (1H, 6H, 1D, 1W, 1M, 3M, 6M, All) using Plotly
+  </Card>
+  <Card title="Holder analysis" icon="users">
+    View top YES and NO holders sorted by position size for any market
+  </Card>
+  <Card title="Wallet research" icon="wallet">
+    Analyze trading history, calculate cost basis, and compute ROI for any wallet address
+  </Card>
+</CardGroup>
+
+## Use cases
+
+### Market research
+
+Quickly look up current prices, volume, and liquidity for any prediction market. Search for high-volume markets to find trending topics.
+
+### Price analysis
+
+Generate interactive charts showing price movement over time with multiple time-window views. Analyze price trends and volatility.
+
+### Position tracking
+
+Find the largest holders for any outcome and track how positions are distributed across wallets.
+
+### Wallet analysis
+
+Calculate cost basis, average entry price, and potential ROI for positions held by specific wallet addresses.
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+- **Python 3.9 or higher** - Required for the chart generation script
+- **Internet access** - Needed for Polymarket APIs and Plotly CDN
+- **Web browser** - To view generated chart HTML files
+- **macOS or Linux** - The tool is designed for Unix-like systems (Homebrew installation)
+
+<Note>
+This is a read-only research tool. It does not place trades or interact with your wallet.
+</Note>
+
+## Security and safety
+
+The Polymarket CLI Research Tool is designed with safety in mind:
+
+- **No trading capabilities** - This repository does not trade or place orders
+- **Read-only access** - All operations query public data only
+- **No private keys** - Never paste private keys or secrets into commands
+- **Public data only** - Wallet analysis uses publicly available on-chain activity
+
+<Warning>
+Wallet analysis may include infrastructure wallets (collateral/escrow contracts) that are not individual traders. Always verify wallet type before drawing conclusions.
+</Warning>
+
+## Educational use
+
+This tool is provided for educational and research purposes only. It is not financial advice and represents unofficial Polymarket tooling.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install the CLI via Homebrew and verify your setup
+  </Card>
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Run your first commands and generate a price chart
+  </Card>
+</CardGroup>

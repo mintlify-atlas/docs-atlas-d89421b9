@@ -1,97 +1,245 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: Polymarket CLI Research Tool
+description: Research Polymarket prediction markets with interactive price charts and wallet analysis
+mode: custom
 ---
 
-## Setting up
+<div className="relative overflow-hidden bg-gradient-to-br from-[#1e3a8a] via-[#1e40af] to-[#2563eb] dark:from-[#0f1729] dark:via-[#1e293b] dark:to-[#1e40af] py-20">
+  <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center opacity-20"></div>
+  <div className="relative max-w-6xl mx-auto px-6 text-center">
+    <h1 className="text-5xl lg:text-6xl font-bold text-white mb-6">
+      Polymarket CLI Research Tool
+    </h1>
+    <p className="text-xl text-blue-100 dark:text-blue-200 max-w-3xl mx-auto mb-8">
+      Research Polymarket prediction markets via the polymarket CLI. Look up events, generate interactive price charts, analyze wallets, and discover top holders.
+    </p>
+    <div className="flex flex-wrap gap-4 justify-center">
+      <a 
+        href="/quickstart" 
+        className="inline-flex items-center px-6 py-3 bg-white text-[#2563eb] font-semibold rounded-lg hover:bg-blue-50 transition-colors no-underline"
+      >
+        Get Started
+      </a>
+      <a 
+        href="/reference/command-reference" 
+        className="inline-flex items-center px-6 py-3 border-2 border-white/30 bg-white/10 backdrop-blur text-white font-semibold rounded-lg hover:bg-white/20 hover:border-white/50 transition-colors no-underline"
+      >
+        Command Reference
+      </a>
+    </div>
+  </div>
+</div>
 
-Get your documentation site up and running in minutes.
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+    Quick start
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Get up and running with the Polymarket CLI in minutes
+  </p>
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+  <Steps>
+    <Step title="Install the polymarket CLI">
+      Install via Homebrew on macOS or Linux:
 
-## Make it yours
+      ```bash
+      brew tap Polymarket/polymarket-cli https://github.com/Polymarket/polymarket-cli
+      brew install polymarket
+      ```
 
-Design a docs site that looks great and empowers your users.
+      Verify installation:
 
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
+      ```bash
+      polymarket --help
+      ```
+    </Step>
 
-## Create beautiful pages
+    <Step title="Look up an event or market">
+      Retrieve event data with all outcome markets:
 
-Everything you need to create world-class documentation.
+      ```bash
+      polymarket -o json events get democratic-presidential-nominee-2028
+      ```
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+      Or look up a single binary market:
 
-## Need inspiration?
+      ```bash
+      polymarket -o json markets get will-donald-trump-win-2024
+      ```
+    </Step>
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+    <Step title="Generate an interactive price chart">
+      First, get the decimal token ID from the condition ID:
+
+      ```bash
+      polymarket -o json clob market 0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d41
+      ```
+
+      Then generate the chart:
+
+      ```bash
+      python3 scripts/chart.py <DECIMAL_TOKEN_ID> --title "Market Name YES"
+      ```
+
+      The script opens an interactive HTML chart in your browser with time-window tabs (1H, 6H, 1D, 1W, 1M, 3M, 6M, All).
+    </Step>
+  </Steps>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+    Core features
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Everything you need to research Polymarket prediction markets
+  </p>
+
+  <CardGroup cols={2}>
+    <Card title="Event and market lookup" icon="magnifying-glass" href="/commands/events">
+      Retrieve event metadata and outcome markets, or look up individual binary markets with prices and volume
+    </Card>
+    <Card title="Interactive price charts" icon="chart-line" href="/workflows/charts">
+      Generate HTML price charts with time-window tabs and full history, powered by Plotly
+    </Card>
+    <Card title="Wallet analysis" icon="wallet" href="/workflows/wallet-analysis">
+      Analyze wallet trade history, compute cost basis, and track position performance
+    </Card>
+    <Card title="Top holder discovery" icon="ranking-star" href="/workflows/holder-analysis">
+      Find the largest YES and NO holders for any market with position sizes
+    </Card>
+    <Card title="CLOB operations" icon="database" href="/commands/clob">
+      Access CLOB market data, price history, order books, and token ID resolution
+    </Card>
+    <Card title="Market search" icon="magnifying-glass-chart" href="/commands/markets">
+      Search for markets by keyword and sort by volume or other metrics
+    </Card>
+  </CardGroup>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+    Explore by workflow
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Common research workflows for Polymarket data
+  </p>
+
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <a 
+      href="/examples/event-lookup" 
+      className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] overflow-hidden hover:border-[#2563eb] dark:hover:border-[#2563eb] transition-colors no-underline"
+    >
+      <div className="h-48 bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-900 dark:to-blue-800 flex items-center justify-center overflow-hidden">
+        <svg className="w-24 h-24 text-white opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      </div>
+      <div className="p-6 bg-white dark:bg-[#1a1d27]">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
+          Event lookup workflow
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Retrieve event data, parse outcome prices, and access condition IDs for multi-outcome markets
+        </p>
+        <span className="text-sm font-medium text-[#2563eb] group-hover:text-[#1e40af] transition-colors inline-flex items-center">
+          View example
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
+
+    <a 
+      href="/workflows/charts" 
+      className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] overflow-hidden hover:border-[#2563eb] dark:hover:border-[#2563eb] transition-colors no-underline"
+    >
+      <div className="h-48 bg-gradient-to-br from-purple-500 to-purple-600 dark:from-purple-900 dark:to-purple-800 flex items-center justify-center overflow-hidden">
+        <svg className="w-24 h-24 text-white opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+        </svg>
+      </div>
+      <div className="p-6 bg-white dark:bg-[#1a1d27]">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
+          Price chart generation
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Generate interactive HTML price charts with time-window tabs and full market history
+        </p>
+        <span className="text-sm font-medium text-[#2563eb] group-hover:text-[#1e40af] transition-colors inline-flex items-center">
+          Learn more
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
+
+    <a 
+      href="/workflows/wallet-analysis" 
+      className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] overflow-hidden hover:border-[#2563eb] dark:hover:border-[#2563eb] transition-colors no-underline"
+    >
+      <div className="h-48 bg-gradient-to-br from-emerald-500 to-emerald-600 dark:from-emerald-900 dark:to-emerald-800 flex items-center justify-center overflow-hidden">
+        <svg className="w-24 h-24 text-white opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        </svg>
+      </div>
+      <div className="p-6 bg-white dark:bg-[#1a1d27]">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
+          Wallet trade analysis
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Analyze wallet positions, compute cost basis, and calculate ROI for prediction market trades
+        </p>
+        <span className="text-sm font-medium text-[#2563eb] group-hover:text-[#1e40af] transition-colors inline-flex items-center">
+          Learn more
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
+
+    <a 
+      href="/workflows/holder-analysis" 
+      className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] overflow-hidden hover:border-[#2563eb] dark:hover:border-[#2563eb] transition-colors no-underline"
+    >
+      <div className="h-48 bg-gradient-to-br from-orange-500 to-orange-600 dark:from-orange-900 dark:to-orange-800 flex items-center justify-center overflow-hidden">
+        <svg className="w-24 h-24 text-white opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+      </div>
+      <div className="p-6 bg-white dark:bg-[#1a1d27]">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
+          Top holder discovery
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Find the largest YES and NO holders for any market with position sizes and wallet addresses
+        </p>
+        <span className="text-sm font-medium text-[#2563eb] group-hover:text-[#1e40af] transition-colors inline-flex items-center">
+          Learn more
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
+  </div>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="rounded-2xl border-2 border-[#2563eb] dark:border-[#1e40af] bg-gradient-to-br from-blue-50 to-blue-100 dark:from-[#0f1729] dark:to-[#1e293b] p-8 text-center">
+    <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+      Ready to get started?
+    </h2>
+    <p className="text-base text-gray-700 dark:text-gray-300 mb-6 max-w-2xl mx-auto">
+      Install the polymarket CLI and start researching prediction markets with interactive charts and wallet analysis
+    </p>
+    <a 
+      href="/installation" 
+      className="inline-flex items-center px-6 py-3 bg-[#2563eb] text-white font-semibold rounded-lg hover:bg-[#1e40af] transition-colors no-underline"
+    >
+      Install now
+    </a>
+  </div>
+</div>

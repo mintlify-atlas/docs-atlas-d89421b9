@@ -1,0 +1,265 @@
+---
+title: CLOB
+description: Access the Polymarket Central Limit Order Book for token IDs, price history, and order books
+---
+
+The `polymarket clob` namespace provides low-level access to the Polymarket CLOB (Central Limit Order Book) for token resolution, price history, and live order book data.
+
+## Get CLOB market info
+
+Convert a condition ID to decimal token IDs required for CLOB queries.
+
+```bash
+polymarket -o json clob market <CONDITION_ID>
+```
+
+<ParamField path="CONDITION_ID" type="string" required>
+  The hexadecimal condition ID from event or market data (starts with `0x`)
+</ParamField>
+
+### Usage
+
+```bash
+polymarket -o json clob market 0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75
+```
+
+### Output structure
+
+```json
+{
+  "condition_id": "0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75",
+  "tokens": [
+    {
+      "token_id": "21742633143463906290569050155826241533067272736897614950488156847949938836455",
+      "outcome": "Yes",
+      "winner": false
+    },
+    {
+      "token_id": "48503210594255711586103437304811426257182813916342861619876357955368862699654",
+      "outcome": "No",
+      "winner": false
+    }
+  ]
+}
+```
+
+<Warning>
+  **Critical:** The `token_id` values are decimal integer strings. You must use these decimal values for all CLOB commands (price-history, book, etc.). Do NOT use hexadecimal `0x...` token IDs.
+</Warning>
+
+### When to use this command
+
+Use `clob market` to get token IDs before:
+
+- Fetching price history
+- Generating price charts
+- Viewing the order book
+- Any other CLOB operation
+
+## Get price history
+
+Retrieve historical price data for a token.
+
+```bash
+polymarket -o json clob price-history --interval <interval> --fidelity <n> <TOKEN_ID>
+```
+
+<ParamField path="TOKEN_ID" type="string" required>
+  The decimal token ID from `clob market` output
+</ParamField>
+
+<ParamField path="--interval" type="string">
+  Time interval: `1m`, `5m`, `15m`, `1h`, `6h`, `1d`, `max` (default: `1h`)
+</ParamField>
+
+<ParamField path="--fidelity" type="number">
+  Maximum number of data points to return (default: 1000, max: 5000)
+</ParamField>
+
+### Recent high-resolution history
+
+```bash
+polymarket -o json clob price-history --interval max 21742633143463906290569050155826241533067272736897614950488156847949938836455
+```
+
+Returns recent data with maximum time resolution.
+
+### Full historical data
+
+For complete market history with reduced resolution:
+
+```bash
+polymarket -o json clob price-history --interval max --fidelity 5000 21742633143463906290569050155826241533067272736897614950488156847949938836455
+```
+
+<Note>
+  Using `--fidelity 5000` retrieves the full timeline from market creation to present, but with fewer data points (one per larger time bucket).
+</Note>
+
+### Output structure
+
+```json
+{
+  "history": [
+    {
+      "t": 1698364800,
+      "p": 0.52
+    },
+    {
+      "t": 1698368400,
+      "p": 0.53
+    }
+  ]
+}
+```
+
+Where:
+- `t` = Unix timestamp (seconds)
+- `p` = Price (0.00 to 1.00)
+
+### Charting workflow
+
+The official charting workflow merges two queries:
+
+```bash
+# 1. Get recent high-res data
+polymarket -o json clob price-history --interval max <TOKEN_ID> > recent.json
+
+# 2. Get full history with reduced resolution
+polymarket -o json clob price-history --interval max --fidelity 5000 <TOKEN_ID> > full.json
+
+# 3. Merge and generate interactive chart
+python3 scripts/chart.py <TOKEN_ID> --title "Market Name YES"
+```
+
+The `chart.py` script automatically handles merging and deduplication.
+
+## Get order book
+
+View current bids and asks for a token.
+
+```bash
+polymarket clob book <TOKEN_ID>
+```
+
+<ParamField path="TOKEN_ID" type="string" required>
+  The decimal token ID from `clob market` output
+</ParamField>
+
+### Usage
+
+```bash
+polymarket clob book 21742633143463906290569050155826241533067272736897614950488156847949938836455
+```
+
+### Output structure
+
+Displays the current order book with:
+
+- Best bid/ask prices
+- Order sizes at each price level
+- Spread between bid and ask
+
+```
+Bids:
+  0.5200  1000
+  0.5100  2500
+  0.5000  5000
+
+Asks:
+  0.5300  800
+  0.5400  1200
+  0.5500  3000
+
+Spread: 0.0100 (1.00%)
+```
+
+<Note>
+  The order book shows the current liquidity available at each price level. This is useful for understanding market depth and potential slippage.
+</Note>
+
+## Token ID conversion
+
+If you have a hex token ID and need decimal:
+
+```bash
+python3 -c "print(int('0xYOUR_HEX_TOKEN_ID', 16))"
+```
+
+### Example
+
+```bash
+python3 -c "print(int('0x2ff3b6b4828b3d28842e30c31a0f58ec76a2be1d8e6c83a9f3d52ff9d6f0ff77', 16))"
+# Output: 21742633143463906290569050155826241533067272736897614950488156847949938836455
+```
+
+## Complete workflow example
+
+From event lookup to price chart:
+
+```bash
+# 1. Get event
+polymarket -o json events get democratic-presidential-nominee-2028
+
+# 2. Extract condition ID for desired outcome (from JSON output)
+# Example: 0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75
+
+# 3. Get decimal token IDs
+polymarket -o json clob market 0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75
+
+# 4. Extract YES token_id from output
+# Example: 21742633143463906290569050155826241533067272736897614950488156847949938836455
+
+# 5. Generate interactive chart
+python3 scripts/chart.py 21742633143463906290569050155826241533067272736897614950488156847949938836455 --title "Newsom YES"
+```
+
+The chart opens in your browser with tabs for 1H, 6H, 1D, 1W, 1M, 3M, 6M, and All time windows.
+
+## Error handling
+
+### "No price history returned"
+
+This error means:
+- You used a hex token ID instead of decimal
+- The token ID is incorrect
+- The market has no trading history yet
+
+**Solution:** Verify you're using the decimal token ID from `clob market` output.
+
+### "Token not found"
+
+The condition ID may be incorrect. Verify:
+- You copied the full condition ID from event/market data
+- The condition ID starts with `0x`
+- The market exists and is active
+
+## Common use cases
+
+### Quick price check
+
+Get the latest price without fetching full history:
+
+```bash
+polymarket -o json clob price-history --interval max --fidelity 1 <TOKEN_ID> | jq -r '.history[-1].p'
+```
+
+### Analyze price volatility
+
+Fetch hourly data and calculate standard deviation:
+
+```bash
+polymarket -o json clob price-history --interval 1h --fidelity 168 <TOKEN_ID>
+```
+
+(168 hours = 1 week)
+
+### Monitor spreads
+
+Regularly check the order book to track market liquidity:
+
+```bash
+watch -n 30 'polymarket clob book <TOKEN_ID>'
+```
+
+Updates every 30 seconds.

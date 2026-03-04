@@ -1,0 +1,134 @@
+---
+title: Events
+description: Look up Polymarket events and multi-outcome markets
+---
+
+The `polymarket events` namespace provides commands for retrieving event metadata, including all outcome markets, condition IDs, and current prices.
+
+## Get an event
+
+Retrieve full event details including all outcome markets.
+
+```bash
+polymarket -o json events get <slug>
+```
+
+<ParamField path="slug" type="string" required>
+  The event slug from the URL path. Extract from URLs like `https://polymarket.com/event/democratic-presidential-nominee-2028` → `democratic-presidential-nominee-2028`
+</ParamField>
+
+### Usage
+
+```bash
+polymarket -o json events get democratic-presidential-nominee-2028
+```
+
+### Output structure
+
+The response includes:
+
+- Event metadata (title, description, end date)
+- `markets` array containing all outcome markets
+- `conditionId` for each outcome
+- Current prices via `outcomePrices`
+- Volume and liquidity data
+
+<Warning>
+  The `outcomePrices` field is returned as a **JSON string**, not a parsed object. You must parse it with `json.loads()` in Python or `JSON.parse()` in JavaScript before use.
+</Warning>
+
+### Example output
+
+```json
+{
+  "id": "0xabc123...",
+  "title": "Democratic Presidential Nominee 2028",
+  "description": "Which Democrat will be nominated...",
+  "endDate": "2028-08-15T00:00:00Z",
+  "markets": [
+    {
+      "id": "0x123...",
+      "question": "Gavin Newsom?",
+      "conditionId": "0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75",
+      "outcomePrices": "[\"0.24\", \"0.76\"]",
+      "volume": "1234567.89",
+      "liquidity": "45678.90"
+    }
+  ]
+}
+```
+
+## Parsing outcome prices
+
+Since `outcomePrices` is a JSON string, parse it before accessing prices:
+
+### Python
+
+```python
+import json
+
+outcome_prices = json.loads(market['outcomePrices'])
+yes_price = float(outcome_prices[0])
+no_price = float(outcome_prices[1])
+```
+
+### JavaScript
+
+```javascript
+const outcomePrices = JSON.parse(market.outcomePrices);
+const yesPrice = parseFloat(outcomePrices[0]);
+const noPrice = parseFloat(outcomePrices[1]);
+```
+
+<Note>
+  In binary markets, `outcomePrices[0]` is the YES price and `outcomePrices[1]` is the NO price. Prices are in the range 0.00 to 1.00.
+</Note>
+
+## Event vs market detection
+
+Use URL paths to determine which command to use:
+
+- URL contains `/event/` → use `polymarket events get`
+- URL contains `/market/` → use `polymarket markets get`
+- Ambiguous slug → try `events get` first; if 404, fall back to `markets get`
+
+## Extracting condition IDs
+
+The `conditionId` from event output is required for:
+
+- Getting decimal token IDs via `polymarket clob market`
+- Fetching top holders via `polymarket data holders`
+- Calculating open interest via `polymarket data open-interest`
+
+### Workflow example
+
+```bash
+# 1. Get event
+polymarket -o json events get democratic-presidential-nominee-2028
+
+# 2. Extract conditionId for desired outcome (e.g., Newsom)
+# conditionId: 0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75
+
+# 3. Get token IDs for CLOB queries
+polymarket -o json clob market 0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75
+```
+
+## Common use cases
+
+### Finding all outcomes in a race
+
+When an event has multiple possible outcomes (e.g., presidential nominees), use `events get` to see all markets in one response.
+
+```bash
+polymarket -o json events get democratic-presidential-nominee-2028
+```
+
+The `markets` array will include entries for Newsom, Whitmer, Shapiro, etc.
+
+### Comparing outcome probabilities
+
+Parse the `outcomePrices` for each market in the `markets` array to compare implied probabilities across all outcomes.
+
+<Note>
+  The sum of YES prices across all outcomes in an event may exceed 1.00 due to the 1% house vig. This is normal and not an error.
+</Note>

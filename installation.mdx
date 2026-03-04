@@ -1,0 +1,133 @@
+---
+title: Installation
+description: Install the Polymarket CLI and verify your setup
+---
+
+Follow these steps to install the Polymarket CLI Research Tool on your system.
+
+## Install via Homebrew
+
+The recommended installation method for macOS and Linux is Homebrew.
+
+<Steps>
+  <Step title="Add the Polymarket tap">
+    First, add the Polymarket CLI tap to your Homebrew installation:
+
+    ```bash
+    brew tap Polymarket/polymarket-cli https://github.com/Polymarket/polymarket-cli
+    ```
+
+    This registers the official Polymarket CLI repository with Homebrew.
+  </Step>
+
+  <Step title="Install the CLI">
+    Install the `polymarket` command:
+
+    ```bash
+    brew install polymarket
+    ```
+
+    Homebrew will download and install the CLI binary along with its dependencies.
+  </Step>
+
+  <Step title="Verify installation">
+    Confirm the CLI is installed correctly and available on your PATH:
+
+    ```bash
+    polymarket --help
+    ```
+
+    You should see the help output listing all available commands and options.
+  </Step>
+</Steps>
+
+## Verify your setup
+
+After installation, verify that all prerequisites are met.
+
+### Check Python version
+
+The chart generation script requires Python 3.9 or higher:
+
+```bash
+python3 --version
+```
+
+You should see output like `Python 3.9.x` or higher.
+
+### Test basic commands
+
+Run a simple command to ensure the CLI can reach Polymarket APIs:
+
+```bash
+polymarket --version
+```
+
+### Verify PATH
+
+If you encounter `polymarket: command not found`, check that the binary is on your PATH:
+
+```bash
+which polymarket
+```
+
+This should output the path to the `polymarket` binary (typically `/opt/homebrew/bin/polymarket` on Apple Silicon or `/usr/local/bin/polymarket` on Intel Macs).
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="polymarket: command not found">
+    If the `polymarket` command is not found:
+
+    1. Verify the CLI is installed: `brew list | grep polymarket`
+    2. Check your PATH includes Homebrew's bin directory
+    3. Try reopening your terminal to refresh the PATH
+    4. Run `brew doctor` to diagnose Homebrew issues
+
+    You can manually check the installation location:
+
+    ```bash
+    ls -l $(brew --prefix)/bin/polymarket
+    ```
+  </Accordion>
+
+  <Accordion title="Python version too old">
+    If your Python version is below 3.9:
+
+    **macOS:**
+    ```bash
+    brew install python@3.11
+    ```
+
+    **Linux (Ubuntu/Debian):**
+    ```bash
+    sudo apt update
+    sudo apt install python3.11
+    ```
+
+    Then verify:
+    ```bash
+    python3 --version
+    ```
+  </Accordion>
+
+  <Accordion title="Network connectivity issues">
+    The CLI requires internet access to query Polymarket APIs. If you see connection errors:
+
+    1. Check your internet connection
+    2. Verify you can reach `https://clob.polymarket.com`
+    3. Check if a firewall or VPN is blocking requests
+    4. Try using a different network
+
+    Test connectivity:
+    ```bash
+    curl -I https://clob.polymarket.com/markets
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<Card title="Quick start" icon="rocket" href="/quickstart">
+  Learn how to look up events, markets, and generate your first price chart
+</Card>

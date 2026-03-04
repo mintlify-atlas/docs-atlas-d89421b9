@@ -1,0 +1,193 @@
+---
+title: Markets
+description: Look up and search individual binary prediction markets
+---
+
+The `polymarket markets` namespace provides commands for retrieving individual binary market data and searching across all markets.
+
+## Get a market
+
+Retrieve details for a single binary YES/NO market.
+
+```bash
+polymarket -o json markets get <slug>
+```
+
+<ParamField path="slug" type="string" required>
+  The market slug from the URL path. Extract from URLs like `https://polymarket.com/market/will-x-happen-by-2025` → `will-x-happen-by-2025`
+</ParamField>
+
+### Usage
+
+```bash
+polymarket -o json markets get will-trump-be-president-2025
+```
+
+### Output structure
+
+The response includes:
+
+- Market metadata (question, description, end date)
+- Current YES/NO prices
+- Volume and liquidity data
+- Condition ID for further queries
+- Market resolution status
+
+### Example output
+
+```json
+{
+  "id": "0x456...",
+  "question": "Will Trump be President on Jan 1, 2025?",
+  "description": "This market resolves YES if...",
+  "conditionId": "0xabc123...",
+  "outcomePrices": "[\"0.98\", \"0.02\"]",
+  "volume": "8765432.10",
+  "volumeNum": 8765432.10,
+  "liquidity": "123456.78",
+  "endDate": "2025-01-01T12:00:00Z",
+  "closed": false,
+  "resolved": true
+}
+```
+
+<Warning>
+  Like events, the `outcomePrices` field is a JSON string and must be parsed before use.
+</Warning>
+
+## Search markets
+
+Search for markets matching a query string with sorting and filtering options.
+
+```bash
+polymarket markets search "<query>" --order <field> --limit <n>
+```
+
+<ParamField path="query" type="string" required>
+  Search terms to match against market questions and descriptions
+</ParamField>
+
+<ParamField path="--order" type="string">
+  Sort field in camelCase format. Common values: `volumeNum`, `liquidity`, `endDate`
+</ParamField>
+
+<ParamField path="--limit" type="number">
+  Maximum number of results to return (default: 10)
+</ParamField>
+
+### Usage
+
+```bash
+polymarket markets search "election" --order volumeNum --limit 20
+```
+
+<Note>
+  Use `markets search` instead of `markets list` to find high-volume markets. The `markets list` command always sorts ascending, making it useless for finding top markets.
+</Note>
+
+### Sorting options
+
+The `--order` flag uses **camelCase** field names:
+
+- `volumeNum` - Sort by total volume (most useful)
+- `liquidity` - Sort by available liquidity
+- `endDate` - Sort by market close date
+- `createdAt` - Sort by creation date
+
+<Warning>
+  The `--order` parameter must use camelCase. Using snake_case like `volume_num` will cause a 422 error.
+</Warning>
+
+### Example: Find top markets
+
+```bash
+# Get 20 highest-volume markets
+polymarket markets search "" --order volumeNum --limit 20
+```
+
+An empty query string returns all markets, sorted by your chosen field.
+
+## Filtering results
+
+Combine search terms with sorting to find specific market types:
+
+### Sports markets
+
+```bash
+polymarket markets search "sports" --order volumeNum --limit 10
+```
+
+### Politics markets
+
+```bash
+polymarket markets search "election president" --order volumeNum --limit 10
+```
+
+### Active markets (not closed)
+
+Filter the JSON output programmatically:
+
+```python
+import json
+import subprocess
+
+result = subprocess.run(
+    ['polymarket', '-o', 'json', 'markets', 'search', '', '--limit', '50'],
+    capture_output=True,
+    text=True
+)
+markets = json.loads(result.stdout)
+active = [m for m in markets if not m.get('closed', False)]
+```
+
+## Market vs event URLs
+
+Determine which command to use based on the URL:
+
+- `/market/` in URL → use `polymarket markets get`
+- `/event/` in URL → use `polymarket events get`
+
+### Example URLs
+
+```
+https://polymarket.com/market/will-x-happen
+→ polymarket markets get will-x-happen
+
+https://polymarket.com/event/2028-democratic-nominee
+→ polymarket events get 2028-democratic-nominee
+```
+
+## Common use cases
+
+### Quick price check
+
+Get the current price for a specific market:
+
+```bash
+polymarket -o json markets get <slug> | jq -r '.outcomePrices' | jq -r '.[0]'
+```
+
+### Monitor high-volume markets
+
+```bash
+polymarket markets search "" --order volumeNum --limit 5
+```
+
+### Find markets closing soon
+
+```bash
+polymarket markets search "" --order endDate --limit 10
+```
+
+Then filter programmatically for markets with `endDate` within your timeframe.
+
+## Next steps
+
+After retrieving a market:
+
+1. Extract the `conditionId` for CLOB queries
+2. Use `polymarket clob market <conditionId>` to get decimal token IDs
+3. Generate price charts with the token ID
+4. Analyze holders or wallet trades
+
+See the [CLOB commands](/commands/clob) and [Data commands](/commands/data) for details.

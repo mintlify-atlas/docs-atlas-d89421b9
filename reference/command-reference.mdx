@@ -1,0 +1,291 @@
+---
+title: Command Reference
+description: Complete reference for all polymarket CLI commands
+---
+
+## Quick Reference
+
+Common commands for working with the Polymarket CLI:
+
+| Goal | Command |
+|------|---------||
+| Get event | `polymarket -o json events get <slug>` |
+| Get market | `polymarket -o json markets get <slug>` |
+| Price history (recent) | `polymarket -o json clob price-history --interval max <TOKEN_ID>` |
+| Price history (full) | `polymarket -o json clob price-history --interval max --fidelity 5000 <TOKEN_ID>` |
+| Top holders | `polymarket -o json data holders <CONDITION_ID>` |
+| Wallet trades | `polymarket -o json data trades <WALLET> --limit 500` |
+| Portfolio value | `polymarket data value <WALLET>` |
+| Open interest | `polymarket data open-interest <CONDITION_ID>` |
+| CLOB market info | `polymarket -o json clob market <CONDITION_ID>` |
+| Order book | `polymarket clob book <TOKEN_ID>` |
+| Search markets | `polymarket markets search "<q>" --order volumeNum` |
+| Generate chart | `python3 scripts/chart.py <TOKEN_ID> --title "..."` |
+
+## Commands by Namespace
+
+### Events Commands
+
+Commands for working with multi-outcome events.
+
+#### `events get`
+
+Retrieve event metadata and all outcome markets.
+
+```bash
+polymarket -o json events get <slug>
+```
+
+**Arguments:**
+- `<slug>` - Event slug from URL (e.g., `democratic-presidential-nominee-2028`)
+
+**Returns:**
+- Event metadata
+- `markets` array containing all outcome markets
+- `condition_id` for each market
+- Current prices for all outcomes
+
+<Warning>
+The `outcomePrices` field is a JSON **string** that must be parsed with `json.loads()` before use.
+</Warning>
+
+### Markets Commands
+
+Commands for working with individual binary markets.
+
+#### `markets get`
+
+Retrieve a single binary YES/NO market.
+
+```bash
+polymarket -o json markets get <slug>
+```
+
+**Arguments:**
+- `<slug>` - Market slug from URL
+
+**Returns:**
+- Market metadata
+- Current YES/NO prices
+- Volume and liquidity data
+
+#### `markets search`
+
+Search for markets with optional ordering and filtering.
+
+```bash
+polymarket markets search "<query>" --order volumeNum --limit 20
+```
+
+**Arguments:**
+- `<query>` - Search query string
+
+**Options:**
+- `--order` - Sort order (use camelCase: `volumeNum`, `liquidityNum`)
+- `--limit` - Maximum number of results (default: 10)
+
+<Note>
+Use `markets search` instead of `markets list` to get high-volume markets first. The `list` command always sorts ascending.
+</Note>
+
+#### `markets list`
+
+List markets (always sorts ascending).
+
+```bash
+polymarket markets list --limit 20
+```
+
+### CLOB Commands
+
+Commands for Central Limit Order Book operations.
+
+#### `clob market`
+
+Get CLOB market information and decimal token IDs.
+
+```bash
+polymarket -o json clob market <CONDITION_ID>
+```
+
+**Arguments:**
+- `<CONDITION_ID>` - Condition ID (hex format accepted)
+
+**Returns:**
+- `tokens` array with decimal `token_id` values
+- Market configuration
+- Trading pair information
+
+<Warning>
+This command is **required** before charting or other CLOB queries. CLOB commands require decimal token IDs, not hex.
+</Warning>
+
+#### `clob price-history`
+
+Fetch historical price data for a token.
+
+```bash
+# Recent high-resolution history
+polymarket -o json clob price-history --interval max <TOKEN_ID>
+
+# Full history with high fidelity
+polymarket -o json clob price-history --interval max --fidelity 5000 <TOKEN_ID>
+```
+
+**Arguments:**
+- `<TOKEN_ID>` - Decimal token ID (not hex)
+
+**Options:**
+- `--interval` - Time interval (`1h`, `1d`, `1w`, `max`)
+- `--fidelity` - Number of data points (higher = more detail)
+
+#### `clob book`
+
+View the order book for a token.
+
+```bash
+polymarket clob book <TOKEN_ID>
+```
+
+**Arguments:**
+- `<TOKEN_ID>` - Decimal token ID
+
+**Returns:**
+- Bid and ask orders
+- Order sizes and prices
+
+### Data Commands
+
+Commands for on-chain data analysis.
+
+#### `data holders`
+
+Get top token holders for a market.
+
+```bash
+polymarket -o json data holders <CONDITION_ID>
+```
+
+**Arguments:**
+- `<CONDITION_ID>` - Market condition ID
+
+**Returns:**
+Array of holders sorted by position size:
+- `outcome_index: 0` - YES holders
+- `outcome_index: 1` - NO holders
+- Wallet address
+- Token balance
+- Current value
+
+#### `data trades`
+
+Get trade history for a wallet.
+
+```bash
+polymarket -o json data trades <WALLET_ADDRESS> --limit 500
+```
+
+**Arguments:**
+- `<WALLET_ADDRESS>` - Ethereum wallet address
+
+**Options:**
+- `--limit` - Maximum number of trades to return
+
+**Returns:**
+- Trade history with timestamps
+- Buy/sell direction
+- Size and price for each trade
+- Condition ID for filtering
+
+<Note>
+Use this data to calculate cost basis by filtering trades for a specific `condition_id` and summing `size × price` for all BUY trades.
+</Note>
+
+#### `data value`
+
+Get current portfolio value for a wallet.
+
+```bash
+polymarket data value <WALLET_ADDRESS>
+```
+
+**Arguments:**
+- `<WALLET_ADDRESS>` - Ethereum wallet address
+
+**Returns:**
+- Total portfolio value in USD
+- Breakdown by market
+
+#### `data open-interest`
+
+Get open interest for a market.
+
+```bash
+polymarket data open-interest <CONDITION_ID>
+```
+
+**Arguments:**
+- `<CONDITION_ID>` - Market condition ID
+
+**Returns:**
+- Open interest in USD
+- Per-outcome breakdown
+
+<Warning>
+In neg-risk markets, open interest is current-value-weighted, not `YES_tokens × $1.00`.
+</Warning>
+
+## Chart Script
+
+Generate interactive HTML price charts with multiple time windows.
+
+```bash
+python3 scripts/chart.py <DECIMAL_TOKEN_ID> --title "Market Name YES"
+```
+
+**Arguments:**
+- `<DECIMAL_TOKEN_ID>` - Decimal token ID from `clob market` command
+
+**Options:**
+- `--title` - Chart title (recommended)
+
+**Features:**
+- Interactive Plotly chart
+- 8 time-window tabs: 1H, 6H, 1D, 1W, 1M, 3M, 6M, All
+- Default view: 1W
+- Automatically opens in browser
+
+**From installed skill:**
+```bash
+python3 ~/.codex/skills/polymarket/scripts/chart.py <TOKEN_ID> --title "..."
+```
+
+## Global Options
+
+### Output Format
+
+Use `-o json` for JSON output (recommended for programmatic use):
+
+```bash
+polymarket -o json events get <slug>
+```
+
+### Help
+
+Get help for any command:
+
+```bash
+polymarket --help
+polymarket events --help
+polymarket markets get --help
+```
+
+## Token ID Conversion
+
+CLOB commands require decimal token IDs. If you have a hex token ID:
+
+```bash
+python3 -c "print(int('0xYOUR_HEX_HERE', 16))"
+```
+
+However, you should always get decimal token IDs from `polymarket clob market <CONDITION_ID>` instead of converting manually.

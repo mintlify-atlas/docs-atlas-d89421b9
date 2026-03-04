@@ -1,0 +1,410 @@
+---
+title: Cost Basis & ROI
+description: Calculate cost basis, unrealized P&L, and win payout scenarios from trade history
+---
+
+## Overview
+
+Compute a wallet's cost basis (average entry price), current position value, and profit/loss scenarios for Polymarket markets. This workflow uses trade history to calculate precise financial metrics.
+
+## Prerequisites
+
+- `polymarket` CLI installed
+- A wallet address with trade history
+- The market's current price (from `markets get` or `clob price-history`)
+
+## Workflow
+
+<Steps>
+  <Step title="Fetch wallet trades">
+    Retrieve the full trade history:
+
+    ```bash
+    polymarket -o json data trades <WALLET_ADDRESS> --limit 500
+    ```
+
+    Example:
+
+    ```bash
+    polymarket -o json data trades 0x9876543210abcdef9876543210abcdef98765432 --limit 500 > trades.json
+    ```
+
+    Each trade object contains:
+
+    ```json
+    {
+      "id": "trade_12345",
+      "condition_id": "0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75",
+      "side": "BUY",
+      "size": "1000",
+      "price": "0.64",
+      "timestamp": 1709856000
+    }
+    ```
+  </Step>
+
+  <Step title="Filter to target market">
+    Isolate trades for the market you're analyzing:
+
+    ```python
+    import json
+
+    with open("trades.json") as f:
+        all_trades = json.load(f)
+
+    target_condition = "0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75"
+    market_trades = [t for t in all_trades if t["condition_id"] == target_condition]
+    ```
+  </Step>
+
+  <Step title="Calculate total cost and shares">
+    Sum across all BUY trades:
+
+    ```python
+    buys = [t for t in market_trades if t["side"] == "BUY"]
+
+    total_cost = sum(
+        float(trade["size"]) * float(trade["price"])
+        for trade in buys
+    )
+
+    total_shares = sum(float(trade["size"]) for trade in buys)
+    ```
+
+    **Example calculation**:
+
+    | Trade | Size | Price | Cost |
+    |-------|------|-------|------|
+    | 1 | 500 | 0.60 | 300 |
+    | 2 | 300 | 0.65 | 195 |
+    | 3 | 200 | 0.70 | 140 |
+    | **Total** | **1000** | — | **635** |
+
+    ```python
+    total_cost = 635.00
+    total_shares = 1000
+    ```
+  </Step>
+
+  <Step title="Compute average entry price">
+    Divide total cost by total shares:
+
+    ```python
+    avg_price = total_cost / total_shares if total_shares > 0 else 0
+    ```
+
+    Continuing the example:
+
+    ```python
+    avg_price = 635 / 1000 = 0.635  # 63.5%
+    ```
+
+    This is your **cost basis** per share.
+  </Step>
+
+  <Step title="Account for SELL trades">
+    If the wallet has sold shares, subtract from the position:
+
+    ```python
+    sells = [t for t in market_trades if t["side"] == "SELL"]
+
+    shares_sold = sum(float(trade["size"]) for trade in sells)
+    shares_held = total_shares - shares_sold
+    ```
+
+    <Note>
+      Cost basis remains the same (it's the average entry price across all BUYs). Only the position size changes.
+    </Note>
+  </Step>
+
+  <Step title="Get current market price">
+    Fetch the latest price:
+
+    ```bash
+    polymarket -o json markets get <market-slug>
+    ```
+
+    Extract the current price from the output (e.g., `0.28` for 28%).
+  </Step>
+
+  <Step title="Calculate current value">
+    Multiply shares held by the current price:
+
+    ```python
+    current_price = 0.28  # From market data
+    current_value = shares_held * current_price
+    ```
+
+    Example:
+
+    ```python
+    shares_held = 1000
+    current_price = 0.28
+    current_value = 1000 * 0.28 = 280.00
+    ```
+  </Step>
+
+  <Step title="Compute unrealized P&L">
+    Compare current value to cost basis:
+
+    ```python
+    unrealized_pnl = current_value - total_cost
+    unrealized_pnl_pct = (unrealized_pnl / total_cost) * 100 if total_cost > 0 else 0
+    ```
+
+    Example:
+
+    ```python
+    unrealized_pnl = 280 - 635 = -355.00  # Down $355
+    unrealized_pnl_pct = (-355 / 635) * 100 = -55.9%
+    ```
+  </Step>
+
+  <Step title="Calculate win payout scenarios">
+    If the outcome resolves in favor of the wallet's position, each share pays out **$1.00**:
+
+    ```python
+    win_payout = shares_held * 1.00
+    win_pnl = win_payout - total_cost
+    roi_if_win = (win_pnl / total_cost) * 100 if total_cost > 0 else 0
+    ```
+
+    Example:
+
+    ```python
+    win_payout = 1000 * 1.00 = 1000.00
+    win_pnl = 1000 - 635 = 365.00
+    roi_if_win = (365 / 635) * 100 = 57.5%
+    ```
+
+    <Note>
+      This assumes the wallet holds **YES** shares and YES resolves. If they hold **NO** shares, the payout occurs if NO resolves.
+    </Note>
+  </Step>
+</Steps>
+
+## Example: Full Cost Basis Calculation
+
+Let's walk through a complete example.
+
+### Input Data
+
+**Wallet**: `0x9876543210abcdef9876543210abcdef98765432`
+
+**Trades** (filtered to one market):
+
+| Trade ID | Side | Size | Price | Cost |
+|----------|------|------|-------|------|
+| 1 | BUY | 500 | 0.60 | 300 |
+| 2 | BUY | 300 | 0.65 | 195 |
+| 3 | BUY | 200 | 0.70 | 140 |
+| 4 | SELL | 100 | 0.68 | (68) |
+
+**Current market price**: `0.28` (28%)
+
+### Calculations
+
+```python
+# BUY trades
+total_cost = 300 + 195 + 140 = 635.00
+total_shares = 500 + 300 + 200 = 1000
+avg_price = 635 / 1000 = 0.635  # 63.5%
+
+# SELL trades
+shares_sold = 100
+shares_held = 1000 - 100 = 900
+
+# Current position
+current_price = 0.28
+current_value = 900 * 0.28 = 252.00
+
+# Unrealized P&L
+unrealized_pnl = 252 - 635 = -383.00  # Down $383
+unrealized_pnl_pct = (-383 / 635) * 100 = -60.3%
+
+# Win scenario (if YES resolves)
+win_payout = 900 * 1.00 = 900.00
+win_pnl = 900 - 635 = 265.00  # Profit $265
+roi_if_win = (265 / 635) * 100 = 41.7%
+```
+
+### Summary
+
+| Metric | Value |
+|--------|-------|
+| **Total Cost** | $635.00 |
+| **Shares Held** | 900 |
+| **Avg Entry Price** | $0.635 (63.5%) |
+| **Current Price** | $0.28 (28%) |
+| **Current Value** | $252.00 |
+| **Unrealized P&L** | -$383.00 (-60.3%) |
+| **Win Payout** | $900.00 |
+| **Win P&L** | +$265.00 (+41.7%) |
+
+## Key Formulas
+
+<CardGroup cols={2}>
+  <Card title="Total Cost">
+    ```
+    Σ (size × price) for BUY trades
+    ```
+  </Card>
+
+  <Card title="Total Shares">
+    ```
+    Σ size for BUY trades
+    ```
+  </Card>
+
+  <Card title="Average Entry Price">
+    ```
+    total_cost / total_shares
+    ```
+  </Card>
+
+  <Card title="Shares Held">
+    ```
+    total_shares - Σ size for SELL trades
+    ```
+  </Card>
+
+  <Card title="Current Value">
+    ```
+    shares_held × current_price
+    ```
+  </Card>
+
+  <Card title="Unrealized P&L">
+    ```
+    current_value - total_cost
+    ```
+  </Card>
+
+  <Card title="Win Payout">
+    ```
+    shares_held × 1.00
+    ```
+  </Card>
+
+  <Card title="ROI if Win">
+    ```
+    (win_payout - total_cost) / total_cost × 100
+    ```
+  </Card>
+</CardGroup>
+
+## Tips
+
+<Tip>
+  **Use high `--limit` for active traders**: A wallet with hundreds of trades needs `--limit 1000` or pagination to capture full history.
+</Tip>
+
+<Tip>
+  **Distinguish YES vs NO positions**: Filter trades by `outcome_index` if available, or cross-reference with holder data to know which side the wallet is on.
+</Tip>
+
+<Tip>
+  **Track realized P&L from SELL trades**: Multiply each SELL by `(sell_price - avg_price)` to compute profit/loss on exited shares.
+
+  ```python
+  realized_pnl = sum(
+      float(t["size"]) * (float(t["price"]) - avg_price)
+      for t in sells
+  )
+  ```
+</Tip>
+
+## Caveats
+
+<Warning>
+  **Cost basis assumes FIFO (first-in, first-out)**. If the wallet uses a different accounting method (LIFO, specific lot), adjust accordingly.
+</Warning>
+
+<Warning>
+  **Fees are not included in trade data**. Polymarket charges a small fee on each trade. True cost basis is slightly higher than the sum of `size × price`.
+</Warning>
+
+<Warning>
+  **Market resolution is binary**: Shares pay $1.00 if the outcome resolves in your favor, or $0.00 otherwise. There is no partial payout.
+</Warning>
+
+<Warning>
+  **Current price may be stale**. Always re-fetch market data before calculating current value. Prices update with each trade.
+</Warning>
+
+## Example Code: Python Script
+
+```python
+import json
+import sys
+
+def compute_cost_basis(trades, condition_id, current_price):
+    # Filter to target market
+    market_trades = [t for t in trades if t["condition_id"] == condition_id]
+    
+    # Separate BUY and SELL
+    buys = [t for t in market_trades if t["side"] == "BUY"]
+    sells = [t for t in market_trades if t["side"] == "SELL"]
+    
+    # Total cost and shares
+    total_cost = sum(float(t["size"]) * float(t["price"]) for t in buys)
+    total_shares = sum(float(t["size"]) for t in buys)
+    avg_price = total_cost / total_shares if total_shares > 0 else 0
+    
+    # Shares held
+    shares_sold = sum(float(t["size"]) for t in sells)
+    shares_held = total_shares - shares_sold
+    
+    # Current value
+    current_value = shares_held * current_price
+    
+    # Unrealized P&L
+    unrealized_pnl = current_value - total_cost
+    unrealized_pnl_pct = (unrealized_pnl / total_cost * 100) if total_cost > 0 else 0
+    
+    # Win scenario
+    win_payout = shares_held * 1.00
+    win_pnl = win_payout - total_cost
+    roi_if_win = (win_pnl / total_cost * 100) if total_cost > 0 else 0
+    
+    return {
+        "total_cost": total_cost,
+        "total_shares": total_shares,
+        "avg_price": avg_price,
+        "shares_held": shares_held,
+        "current_price": current_price,
+        "current_value": current_value,
+        "unrealized_pnl": unrealized_pnl,
+        "unrealized_pnl_pct": unrealized_pnl_pct,
+        "win_payout": win_payout,
+        "win_pnl": win_pnl,
+        "roi_if_win": roi_if_win,
+    }
+
+if __name__ == "__main__":
+    # Load trades from JSON file
+    with open("trades.json") as f:
+        trades = json.load(f)
+    
+    condition_id = "0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75"
+    current_price = 0.28  # Update with real-time price
+    
+    result = compute_cost_basis(trades, condition_id, current_price)
+    
+    print(f"Total Cost: ${result['total_cost']:.2f}")
+    print(f"Shares Held: {result['shares_held']:.0f}")
+    print(f"Avg Entry Price: ${result['avg_price']:.4f} ({result['avg_price']*100:.2f}%)")
+    print(f"Current Price: ${result['current_price']:.4f} ({result['current_price']*100:.2f}%)")
+    print(f"Current Value: ${result['current_value']:.2f}")
+    print(f"Unrealized P&L: ${result['unrealized_pnl']:.2f} ({result['unrealized_pnl_pct']:.2f}%)")
+    print(f"Win Payout: ${result['win_payout']:.2f}")
+    print(f"Win P&L: ${result['win_pnl']:.2f} ({result['roi_if_win']:.2f}%)")
+```
+
+## Next Steps
+
+After computing cost basis:
+
+- **Monitor the position**: Re-run the analysis periodically as the market price changes
+- **Compare to other holders**: Use [Holder Analysis](/workflows/holder-analysis) to see how this wallet ranks
+- **Generate a price chart**: Visualize market movement with [Charts](/workflows/charts)

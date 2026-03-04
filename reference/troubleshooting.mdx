@@ -1,0 +1,531 @@
+---
+title: Troubleshooting
+description: Common errors and solutions for the Polymarket CLI Research Tool
+---
+
+This page covers common errors you might encounter when using the Polymarket CLI and how to resolve them.
+
+## Installation Issues
+
+<Accordion title="polymarket: command not found">
+
+**Symptoms:**
+```bash
+$ polymarket --help
+bash: polymarket: command not found
+```
+
+**Causes:**
+- The `polymarket` CLI is not installed
+- The binary is not on your system `PATH`
+- Installation failed or is incomplete
+
+**Solutions:**
+
+1. **Install the CLI** (macOS/Linux via Homebrew):
+   ```bash
+   brew tap Polymarket/polymarket-cli https://github.com/Polymarket/polymarket-cli
+   brew install polymarket
+   ```
+
+2. **Verify installation:**
+   ```bash
+   which polymarket
+   # Should output: /usr/local/bin/polymarket (or similar)
+   
+   polymarket --help
+   # Should display help text
+   ```
+
+3. **Check your PATH:**
+   ```bash
+   echo $PATH
+   # Ensure the installation directory is included
+   ```
+
+4. **Restart your terminal** after installation to refresh the PATH.
+
+</Accordion>
+
+<Accordion title="Python not found or wrong version">
+
+**Symptoms:**
+```bash
+$ python3 scripts/chart.py
+python3: command not found
+```
+
+**Solution:**
+
+The chart script requires Python 3.9 or later.
+
+1. **Check Python version:**
+   ```bash
+   python3 --version
+   # Should be 3.9 or higher
+   ```
+
+2. **Install Python 3.9+:**
+   - macOS: `brew install python@3.9`
+   - Ubuntu/Debian: `sudo apt-get install python3.9`
+   - Fedora: `sudo dnf install python3.9`
+
+3. **Use the full path if needed:**
+   ```bash
+   /usr/bin/python3 scripts/chart.py <TOKEN_ID>
+   ```
+
+</Accordion>
+
+## Lookup Errors
+
+<Accordion title="404 error on event/market lookup">
+
+**Symptoms:**
+```bash
+$ polymarket events get my-market-slug
+Error: 404 Not Found
+```
+
+**Cause:** Using the wrong command namespace for the resource type.
+
+**Solution:**
+
+Use the command that matches the URL path:
+
+- **Event URL** (`/event/`) → `polymarket events get <slug>`
+- **Market URL** (`/market/`) → `polymarket markets get <slug>`
+
+**Examples:**
+
+```bash
+# For https://polymarket.com/event/democratic-presidential-nominee-2028
+polymarket events get democratic-presidential-nominee-2028  # ✓
+
+# For https://polymarket.com/market/will-biden-run-in-2024  
+polymarket markets get will-biden-run-in-2024  # ✓
+```
+
+**Ambiguous slug?** Try `events get` first. If that returns 404, try `markets get`.
+
+</Accordion>
+
+<Accordion title="Invalid slug format">
+
+**Symptoms:**
+```bash
+Error: Invalid slug format
+```
+
+**Cause:** The slug contains invalid characters or formatting.
+
+**Solution:**
+
+1. **Extract the slug correctly from the URL:**
+   - Take only the last path segment
+   - Example: `https://polymarket.com/event/democratic-presidential-nominee-2028`
+   - Slug: `democratic-presidential-nominee-2028`
+
+2. **Don't include:**
+   - The domain (`polymarket.com`)
+   - The path prefix (`/event/` or `/market/`)
+   - Query parameters (`?anything=value`)
+   - Trailing slashes
+
+**Correct:**
+```bash
+polymarket events get democratic-presidential-nominee-2028
+```
+
+**Incorrect:**
+```bash
+polymarket events get /event/democratic-presidential-nominee-2028
+polymarket events get https://polymarket.com/event/democratic-presidential-nominee-2028
+```
+
+</Accordion>
+
+## Search and Query Errors
+
+<Accordion title="422 error when searching markets">
+
+**Symptoms:**
+```bash
+$ polymarket markets search "election" --order volume_num
+Error: 422 Unprocessable Entity
+```
+
+**Cause:** Using snake_case instead of camelCase for the `--order` parameter.
+
+**Solution:**
+
+Use camelCase for all order values:
+
+```bash
+# Correct (camelCase)
+polymarket markets search "election" --order volumeNum  # ✓
+polymarket markets search "election" --order liquidityNum  # ✓
+
+# Incorrect (snake_case)  
+polymarket markets search "election" --order volume_num  # ✗
+polymarket markets search "election" --order liquidity_num  # ✗
+```
+
+**Valid order values:**
+- `volumeNum`
+- `liquidityNum`
+- `endDate`
+
+</Accordion>
+
+## Token ID and Price History Issues
+
+<Accordion title="No price history returned">
+
+**Symptoms:**
+```bash
+$ polymarket clob price-history --interval max 0x1a2b3c4d
+Error: No price history found
+```
+
+**Causes:**
+1. Using hex token ID instead of decimal
+2. Invalid token ID
+3. Market has no trading history
+
+**Solutions:**
+
+1. **Get the decimal token ID from CLOB market command:**
+   ```bash
+   # First, get the decimal token ID
+   polymarket -o json clob market <CONDITION_ID>
+   # Look for "token_id" in the "tokens" array
+   
+   # Then use the decimal value
+   polymarket clob price-history --interval max 123456789012345678
+   ```
+
+2. **Don't use hex format:**
+   ```bash
+   # Wrong
+   polymarket clob price-history --interval max 0x1a2b3c4d  # ✗
+   
+   # Right  
+   polymarket clob price-history --interval max 123456789  # ✓
+   ```
+
+3. **Verify the token ID exists:**
+   ```bash
+   polymarket -o json clob market <CONDITION_ID>
+   # Check that the token_id appears in the output
+   ```
+
+</Accordion>
+
+<Accordion title="Token ID conversion errors">
+
+**Symptoms:**
+Incorrect or mismatched token IDs when converting from hex to decimal.
+
+**Solution:**
+
+**Don't convert manually.** Always get decimal token IDs directly from the CLOB API:
+
+```bash
+polymarket -o json clob market <CONDITION_ID>
+```
+
+The `tokens` array contains decimal `token_id` values you can use directly.
+
+**If you must convert from hex:**
+
+```bash
+python3 -c "print(int('0xYOUR_HEX_HERE', 16))"
+```
+
+Remove the `0x` prefix and any leading zeros:
+
+```bash
+# Correct
+python3 -c "print(int('0x1a2b3c4d5e6f', 16))"
+
+# Incorrect
+python3 -c "print(int('1a2b3c4d5e6f', 16))"  # Missing 0x
+python3 -c "print(int('0x0001a2b3c', 16))"   # Leading zeros ok, but unnecessary
+```
+
+</Accordion>
+
+## Chart Generation Issues
+
+<Accordion title="Browser does not open automatically">
+
+**Symptoms:**
+Chart script runs successfully but no browser window opens.
+
+**Solution:**
+
+Open the HTML file manually:
+
+```bash
+$ python3 scripts/chart.py 123456789 --title "Market Name"
+Chart saved to: /path/to/chart_123456789.html
+# Browser doesn't open
+
+# Open manually
+open /path/to/chart_123456789.html  # macOS
+xdg-open /path/to/chart_123456789.html  # Linux
+```
+
+The chart script prints the full path to the generated HTML file. Copy and paste it into your browser.
+
+</Accordion>
+
+<Accordion title="Chart script module errors">
+
+**Symptoms:**
+```bash
+$ python3 scripts/chart.py 123456789
+ModuleNotFoundError: No module named 'requests'
+```
+
+**Cause:** Missing Python dependencies.
+
+**Solution:**
+
+Install required modules:
+
+```bash
+pip3 install requests plotly
+```
+
+Or if using a virtual environment:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install requests plotly
+python3 scripts/chart.py 123456789 --title "Market"
+```
+
+</Accordion>
+
+<Accordion title="Chart shows no data">
+
+**Symptoms:**
+Chart opens but is blank or shows "No data available."
+
+**Causes:**
+1. Invalid token ID
+2. Market has no trading history
+3. Network connectivity issues
+
+**Solutions:**
+
+1. **Verify the token ID:**
+   ```bash
+   polymarket -o json clob market <CONDITION_ID>
+   # Confirm the token_id you're using appears in the output
+   ```
+
+2. **Check price history manually:**
+   ```bash
+   polymarket -o json clob price-history --interval max <TOKEN_ID>
+   # Should return an array of price points
+   ```
+
+3. **Check network connectivity:**
+   ```bash
+   curl -I https://clob.polymarket.com
+   # Should return 200 OK or similar
+   ```
+
+</Accordion>
+
+## Data Analysis Errors
+
+<Accordion title="Empty trades array for wallet">
+
+**Symptoms:**
+```bash
+$ polymarket -o json data trades 0xa5Ef39C3D3e10d0B270233af41CaC69796B12966
+[]
+```
+
+**Causes:**
+1. Wallet has no trading history (might be an infrastructure wallet)
+2. Invalid wallet address
+3. Wallet hasn't traded on Polymarket
+
+**Solution:**
+
+**Check if it's an infrastructure wallet:**
+
+Some wallets show large positions but no trades because they're infrastructure/collateral wallets, not trader wallets.
+
+**Signals of an infrastructure wallet:**
+- Empty trades array `[]`
+- Very large portfolio value (millions or billions)
+- Only YIELD activity in history
+- Average price of $0 on all positions
+- Identical token amounts across all outcomes
+
+**Example:**
+```bash
+polymarket -o json data value 0xa5Ef39C3D3e10d0B270233af41CaC69796B12966
+# Returns: ~$11.9B (Polymarket's neg-risk escrow contract)
+
+polymarket -o json data trades 0xa5Ef39C3D3e10d0B270233af41CaC69796B12966  
+# Returns: [] (no trades)
+```
+
+These wallets obtained tokens via CTF splits, not purchases, so they have no trade history.
+
+</Accordion>
+
+<Accordion title="Holder data seems incorrect">
+
+**Symptoms:**
+Top holders show unexpected addresses or values.
+
+**Cause:** Data includes infrastructure wallets alongside real traders.
+
+**Solution:**
+
+**Filter out infrastructure wallets** when analyzing holders:
+
+1. Get holder data:
+   ```bash
+   polymarket -o json data holders <CONDITION_ID>
+   ```
+
+2. For each holder, check trade history:
+   ```bash
+   polymarket -o json data trades <WALLET_ADDRESS>
+   ```
+
+3. **Skip wallets with:**
+   - Empty trades array
+   - Identical YES/NO position sizes
+   - Billions in total value
+
+**Example filtering logic (Python):**
+```python
+def is_trader(wallet_address):
+    result = subprocess.run(
+        ['polymarket', '-o', 'json', 'data', 'trades', wallet_address],
+        capture_output=True, text=True
+    )
+    trades = json.loads(result.stdout)
+    return len(trades) > 0  # True if wallet has trades
+```
+
+</Accordion>
+
+## Network and API Issues
+
+<Accordion title="Connection timeout or network errors">
+
+**Symptoms:**
+```bash
+Error: Connection timeout
+Error: Could not resolve host
+```
+
+**Solutions:**
+
+1. **Check internet connectivity:**
+   ```bash
+   ping polymarket.com
+   ```
+
+2. **Verify Polymarket API is accessible:**
+   ```bash
+   curl https://clob.polymarket.com/
+   curl https://gamma-api.polymarket.com/
+   ```
+
+3. **Check for firewall/proxy issues:**
+   - Corporate networks may block Polymarket APIs
+   - VPNs may interfere with connections
+   - Try temporarily disabling VPN/proxy
+
+4. **Increase timeout (if CLI supports it):**
+   ```bash
+   polymarket --timeout 60 markets get <slug>
+   ```
+
+</Accordion>
+
+<Accordion title="Rate limiting errors">
+
+**Symptoms:**
+```bash
+Error: 429 Too Many Requests
+Error: Rate limit exceeded
+```
+
+**Cause:** Making too many API requests in a short time period.
+
+**Solutions:**
+
+1. **Add delays between requests:**
+   ```bash
+   for slug in market1 market2 market3; do
+     polymarket markets get $slug
+     sleep 2  # Wait 2 seconds between requests
+   done
+   ```
+
+2. **Reduce request frequency** in scripts
+
+3. **Cache results** to avoid repeated lookups
+
+4. **Wait and retry:**
+   ```bash
+   # Wait 60 seconds if rate limited
+   sleep 60
+   polymarket markets get <slug>
+   ```
+
+</Accordion>
+
+## Getting Help
+
+<Accordion title="Where to get more help">
+
+If you're still experiencing issues:
+
+1. **Check the CLI help:**
+   ```bash
+   polymarket --help
+   polymarket <namespace> --help
+   polymarket <namespace> <command> --help
+   ```
+
+2. **Review the official documentation:**
+   - [Polymarket CLI GitHub](https://github.com/Polymarket/polymarket-cli)
+   - [Polymarket API docs](https://docs.polymarket.com)
+
+3. **Check for updates:**
+   ```bash
+   brew upgrade polymarket  # If installed via Homebrew
+   ```
+
+4. **Common debugging steps:**
+   - Run with `-o json` for structured output
+   - Check the exact error message
+   - Verify all prerequisites are installed
+   - Test with a known-working example
+
+5. **Create a minimal reproduction:**
+   ```bash
+   # Document the exact command that fails
+   polymarket events get example-slug
+   
+   # Include the full error output
+   # Include your CLI version
+   polymarket --version
+   ```
+
+</Accordion>

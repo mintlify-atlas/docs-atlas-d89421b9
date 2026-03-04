@@ -1,80 +1,261 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick start
+description: Run your first commands and generate an interactive price chart
 ---
 
-## Get started in three steps
+This guide walks you through the essential commands to get started with the Polymarket CLI Research Tool.
 
-Get your documentation site running locally and make your first customization.
+## Look up an event
 
-### Step 1: Set up your local environment
+Events contain multiple outcome markets. To look up an event, use the slug from the event URL.
+
+<Steps>
+  <Step title="Find the event slug">
+    From a Polymarket event URL like:
+    ```
+    https://polymarket.com/event/democratic-presidential-nominee-2028
+    ```
+
+    The slug is the last path segment: `democratic-presidential-nominee-2028`
+  </Step>
+
+  <Step title="Run the events command">
+    Look up the event using JSON output format:
+
+    ```bash
+    polymarket -o json events get democratic-presidential-nominee-2028
+    ```
+
+    This returns event metadata including:
+    - All outcome markets in the `markets` array
+    - Condition IDs for each outcome
+    - Current prices (in the `outcomePrices` field as a JSON string)
+    - Volume and liquidity data
+  </Step>
+</Steps>
+
+<Note>
+The `outcomePrices` field is a JSON **string** that must be parsed separately. If you're processing the output programmatically, use `json.loads()` on this field.
+</Note>
+
+## Look up a market
+
+Individual binary YES/NO markets use a different command.
+
+<Steps>
+  <Step title="Identify a market URL">
+    Market URLs contain `/market/` in the path:
+    ```
+    https://polymarket.com/market/will-bitcoin-hit-100k-by-year-end
+    ```
+
+    The slug is: `will-bitcoin-hit-100k-by-year-end`
+  </Step>
+
+  <Step title="Run the markets command">
+    Look up the market:
+
+    ```bash
+    polymarket -o json markets get will-bitcoin-hit-100k-by-year-end
+    ```
+
+    This returns a single market object with:
+    - Current YES/NO prices
+    - Volume and liquidity metrics
+    - The `condition_id` (required for further analysis)
+  </Step>
+</Steps>
+
+<Warning>
+Using `events get` on a market slug (or vice versa) will return a 404 error. Always match the command to the URL path: `/event/` → `events get`, `/market/` → `markets get`.
+</Warning>
+
+## Generate a price chart
+
+Create an interactive HTML price chart with multiple time-window tabs.
+
+<Steps>
+  <Step title="Get the condition ID">
+    From your event or market lookup, note the `condition_id` value. It looks like:
+    ```
+    0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75
+    ```
+  </Step>
+
+  <Step title="Convert to decimal token ID">
+    The chart script requires a decimal token ID, not the hex condition ID. Get it using:
+
+    ```bash
+    polymarket -o json clob market 0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75
+    ```
+
+    The output contains a `tokens` array:
+    ```json
+    {
+      "tokens": [
+        {
+          "token_id": "71321045679065602346747843609838734172500046701793441554156264871781491144591",
+          "outcome": "Yes"
+        },
+        {
+          "token_id": "39847950530539906082798520801973142091201919117568609687493690497182515012810",
+          "outcome": "No"
+        }
+      ]
+    }
+    ```
+
+    Copy the `token_id` for the outcome you want to chart (YES or NO).
+  </Step>
+
+  <Step title="Generate the chart">
+    Run the chart script with your decimal token ID:
+
+    ```bash
+    python3 scripts/chart.py 71321045679065602346747843609838734172500046701793441554156264871781491144591 --title "Bitcoin $100k YES"
+    ```
+
+    The script will:
+    1. Fetch recent high-resolution price history
+    2. Fetch full historical data with `--fidelity 5000`
+    3. Merge the data into a single timeline
+    4. Generate an HTML file
+    5. Open it automatically in your browser
+  </Step>
+</Steps>
+
+<Note>
+If you installed this as a Codex skill, use the full path to the script:
+```bash
+python3 ~/.codex/skills/polymarket/scripts/chart.py <TOKEN_ID> --title "Market Name YES"
+```
+</Note>
+
+## Chart features
+
+The generated chart includes:
+
+- **8 time-window tabs**: 1H, 6H, 1D, 1W, 1M, 3M, 6M, All
+- **Interactive tooltips**: Hover to see exact price and timestamp
+- **Zoom and pan**: Click and drag to zoom, double-click to reset
+- **Default view**: Opens to the 1W (one week) view
+
+## Common workflows
 
 <AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
+  <Accordion title="Search for high-volume markets">
+    Find trending markets sorted by volume:
+
+    ```bash
+    polymarket markets search "" --order volumeNum --limit 20
+    ```
+
+    <Note>
+    Use `markets search` instead of `markets list` because `list` always sorts ascending (least useful markets first). The `--order` parameter requires camelCase: `volumeNum`, not `volume_num`.
+    </Note>
   </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
+
+  <Accordion title="Find top holders">
+    View the largest position holders for a market:
+
+    ```bash
+    polymarket -o json data holders 0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75
+    ```
+
+    The output includes:
+    - `outcome_index: 0` = YES holders
+    - `outcome_index: 1` = NO holders
+    - Wallet addresses and position sizes
+  </Accordion>
+
+  <Accordion title="Analyze a wallet's trades">
+    Get trading history for cost-basis analysis:
+
+    ```bash
+    polymarket -o json data trades 0xYOUR_WALLET_ADDRESS --limit 500
+    ```
+
+    Filter the results by `condition_id` to analyze positions in a specific market. Calculate:
+
+    - **Total cost**: Sum of `(size × price)` for all BUY trades
+    - **Total shares**: Sum of `size` for all BUY trades
+    - **Average price**: `total_cost / total_shares`
+    - **Current value**: `shares_held × current_price`
+    - **Win payout**: `shares_held × $1.00`
+    - **ROI if wins**: `((payout - cost) / cost) × 100`
+  </Accordion>
+
+  <Accordion title="Get current price history">
+    Fetch recent price data at maximum resolution:
+
+    ```bash
+    polymarket -o json clob price-history --interval max <DECIMAL_TOKEN_ID>
+    ```
+
+    For full historical data with lower resolution:
+
+    ```bash
+    polymarket -o json clob price-history --interval max --fidelity 5000 <DECIMAL_TOKEN_ID>
+    ```
   </Accordion>
 </AccordionGroup>
 
-### Step 2: Deploy your changes
+## Key gotchas
+
+<Warning>
+Avoid these common mistakes:
+</Warning>
+
+- **Wrong command → 404**: Match the command to the URL path (`/event/` vs `/market/`)
+- **Token IDs must be decimal**: Never use hex `0x...` format for CLOB commands
+- **outcomePrices is a string**: Parse it with `json.loads()` when processing event data
+- **Ordering is camelCase**: Use `volumeNum`, not `volume_num` (causes 422 error)
+- **Sum of YES prices ≈ 1.01**: Normal 1% house edge, not an error
+
+## Troubleshooting
 
 <AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+  <Accordion title="No price history returned">
+    Confirm you're using a **decimal** CLOB token ID, not hex. Get it via:
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    ```bash
+    polymarket -o json clob market <CONDITION_ID>
+    ```
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
+    Read the `token_id` field from the `tokens` array (not the hex condition ID).
+  </Accordion>
+
+  <Accordion title="Browser doesn't open automatically">
+    The chart script prints the HTML file path. Open it manually:
+
+    ```bash
+    open /path/to/chart.html  # macOS
+    xdg-open /path/to/chart.html  # Linux
+    ```
+  </Accordion>
+
+  <Accordion title="422 error when searching markets">
+    The `--order` parameter requires camelCase:
+
+    ```bash
+    # ✓ Correct
+    polymarket markets search "crypto" --order volumeNum
+
+    # ✗ Wrong
+    polymarket markets search "crypto" --order volume_num
+    ```
   </Accordion>
 </AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
+Now that you've run your first commands:
 
-<CardGroup cols={2}>
+- Explore different markets and generate charts for price analysis
+- Use holder analysis to understand market positioning
+- Analyze wallet trades to calculate cost basis and ROI
+- Search for trending markets using volume sorting
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
+<Card title="View full command reference" icon="book" href="/reference/command-reference">
+  See all available commands and options
 </Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

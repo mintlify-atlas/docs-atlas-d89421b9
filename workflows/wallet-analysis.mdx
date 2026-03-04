@@ -1,0 +1,236 @@
+---
+title: Wallet Analysis
+description: Analyze wallet trade history and identify infrastructure vs. trader wallets
+---
+
+## Overview
+
+Fetch and analyze on-chain wallet activity to compute cost basis, current position value, and distinguish between active traders and infrastructure/escrow wallets.
+
+## Prerequisites
+
+- `polymarket` CLI installed
+- A wallet address (Ethereum address starting with `0x`)
+- The `condition_id` for the market you want to analyze
+
+## Workflow
+
+<Steps>
+  <Step title="Fetch wallet trades">
+    Retrieve the wallet's trade history:
+
+    ```bash
+    polymarket -o json data trades <WALLET_ADDRESS> --limit 500
+    ```
+
+    This returns an array of trade objects:
+
+    ```json
+    [
+      {
+        "id": "...",
+        "condition_id": "0x...",
+        "side": "BUY",
+        "size": "100",
+        "price": "0.64",
+        "timestamp": 1709856000
+      }
+    ]
+    ```
+
+    Each trade includes:
+    - `condition_id`: The market's condition ID
+    - `side`: `"BUY"` or `"SELL"`
+    - `size`: Number of shares (decimal string)
+    - `price`: Price per share (decimal string, 0-1 range)
+    - `timestamp`: Unix timestamp (seconds)
+
+    <Note>
+      Use `--limit 500` to get sufficient history. Large traders may need multiple paginated requests.
+    </Note>
+  </Step>
+
+  <Step title="Filter to target market">
+    Filter trades by `condition_id` to isolate activity for your market of interest:
+
+    ```python
+    target_condition = "0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75"
+    market_trades = [t for t in trades if t["condition_id"] == target_condition]
+    ```
+  </Step>
+
+  <Step title="Separate BUY and SELL trades">
+    Split trades by side:
+
+    ```python
+    buys = [t for t in market_trades if t["side"] == "BUY"]
+    sells = [t for t in market_trades if t["side"] == "SELL"]
+    ```
+
+    For cost-basis analysis, you'll primarily use BUY trades.
+  </Step>
+
+  <Step title="Compute cost basis metrics">
+    Calculate the wallet's position:
+
+    ```python
+    # Total cost (in dollars)
+    total_cost = sum(float(t["size"]) * float(t["price"]) for t in buys)
+
+    # Total shares purchased
+    total_shares = sum(float(t["size"]) for t in buys)
+
+    # Average entry price
+    avg_price = total_cost / total_shares if total_shares > 0 else 0
+
+    # Current position (if no sells yet)
+    shares_held = total_shares - sum(float(t["size"]) for t in sells)
+    ```
+
+    <Warning>
+      This assumes all shares are still held. For partial exits, subtract SELL volumes from `total_shares`.
+    </Warning>
+  </Step>
+
+  <Step title="Calculate current value and ROI">
+    Fetch the current market price and compute position value:
+
+    ```bash
+    polymarket -o json markets get <market-slug>
+    ```
+
+    Extract the current price (e.g., `0.28` for 28%), then:
+
+    ```python
+    current_price = 0.28  # From market data
+    current_value = shares_held * current_price
+
+    # Win payout if outcome resolves YES
+    win_payout = shares_held * 1.00
+
+    # Profit/loss scenarios
+    unrealized_pnl = current_value - total_cost
+    win_pnl = win_payout - total_cost
+    roi_if_win = (win_pnl / total_cost) * 100 if total_cost > 0 else 0
+    ```
+  </Step>
+</Steps>
+
+## Wallet Profiling: Infrastructure vs. Trader
+
+Not all large wallets are traders. Polymarket uses infrastructure wallets for escrow, collateral management, and neg-risk CTF splits. Here's how to identify them:
+
+### Infrastructure Wallet Signals
+
+<AccordionGroup>
+  <Accordion title="Empty trade history">
+    ```bash
+    polymarket -o json data trades <WALLET> --limit 500
+    ```
+
+    Returns `[]` (empty array). Infrastructure wallets obtain tokens via CTF minting, not trading.
+  </Accordion>
+
+  <Accordion title="Zero average price on all positions">
+    When checking holders:
+
+    ```bash
+    polymarket -o json data holders <CONDITION_ID>
+    ```
+
+    Infrastructure wallets show `"avg_price": "0"` because tokens were minted (split from collateral), not purchased.
+  </Accordion>
+
+  <Accordion title="Identical position sizes across outcomes">
+    In a binary YES/NO market, infrastructure wallets hold **exactly equal** amounts of both outcomes:
+
+    ```json
+    {
+      "wallet": "0xa5Ef39C3D3e10d0B270233af41CaC69796B12966",
+      "yes_shares": "11900000000",
+      "no_shares": "11900000000"
+    }
+    ```
+
+    This is characteristic of CTF collateral splits (1 USDC → 1 YES + 1 NO).
+  </Accordion>
+
+  <Accordion title="Only YIELD activity in history">
+    If the wallet has activity, it's purely yield-farming or liquidity provision, not directional bets.
+  </Accordion>
+
+  <Accordion title="Extremely large portfolio value">
+    ```bash
+    polymarket data value <WALLET>
+    ```
+
+    Returns billions of dollars (e.g., `$11.9B`). This is Polymarket's own infrastructure, not a whale trader.
+  </Accordion>
+</AccordionGroup>
+
+### Example: Polymarket Neg-Risk Escrow
+
+```bash
+polymarket -o json data trades 0xa5Ef39C3D3e10d0B270233af41CaC69796B12966 --limit 500
+# Returns: []
+
+polymarket data value 0xa5Ef39C3D3e10d0B270233af41CaC69796B12966
+# Returns: ~$11.9B
+```
+
+This wallet is **Polymarket's neg-risk escrow contract**, not a bettor.
+
+## Tips
+
+<Tip>
+  **Large holder ≠ big trader**. Always check trade history before assuming a wallet is taking a directional bet. Infrastructure wallets can appear at the top of holder lists.
+</Tip>
+
+<Tip>
+  Use `--limit 1000` or paginate if analyzing very active wallets. The default limit may truncate history.
+</Tip>
+
+<Tip>
+  To find the biggest **active traders** (not infrastructure), filter holders by:
+  1. `avg_price > 0` (they bought, not minted)
+  2. Non-zero trade history
+  3. Asymmetric YES vs NO holdings
+</Tip>
+
+## Caveats
+
+<Warning>
+  **Trade history is public on-chain data**. You're analyzing public addresses, which may include smart contracts, aggregators, or privacy-preserving protocols.
+</Warning>
+
+<Warning>
+  **Partial exits are not automatically tracked**. If the wallet sold some shares, you must manually subtract SELL volumes from the position.
+</Warning>
+
+<Warning>
+  **Market makers and LPs** may have high trade volumes but no directional bias. Check if BUY and SELL volumes are roughly balanced.
+</Warning>
+
+## Example: Full Wallet Analysis
+
+```bash
+# 1. Fetch trades
+polymarket -o json data trades 0x1234567890abcdef1234567890abcdef12345678 --limit 500 > trades.json
+
+# 2. Filter to a specific market in your code (Python, Node.js, etc.)
+# target_condition = "0x0f49db97..."
+
+# 3. Compute cost basis
+# total_cost = sum(size × price for BUY trades)
+# avg_price = total_cost / total_shares
+
+# 4. Get current price
+polymarket -o json markets get gavin-newsom-2028
+
+# 5. Calculate unrealized P&L and win payout
+# current_value = shares_held × current_price
+# win_payout = shares_held × 1.00
+# roi_if_win = (win_payout - total_cost) / total_cost × 100
+```
+
+You now have a complete picture of the wallet's position: entry price, current value, and profit scenarios.

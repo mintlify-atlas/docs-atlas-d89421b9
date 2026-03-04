@@ -1,0 +1,202 @@
+---
+title: 'Market Research Example'
+description: 'Search for markets, sort by volume, and analyze market data'
+---
+
+## Overview
+
+This example demonstrates how to discover and research Polymarket markets using search and filtering. You'll learn how to:
+
+- Search for markets by keyword
+- Sort results by trading volume
+- Analyze market metadata and liquidity
+- Understand market types (binary vs multi-outcome)
+
+## Searching Markets
+
+### Basic Search
+
+Search for markets related to "election":
+
+```bash
+polymarket markets search "election" --limit 20
+```
+
+### Sorting by Volume
+
+To find the most active markets, sort by trading volume:
+
+```bash
+polymarket markets search "election" --order volumeNum --limit 20
+```
+
+<Warning>
+The `--order` parameter uses **camelCase**, not snake_case:
+
+- ✅ `--order volumeNum`
+- ❌ `--order volume_num` (causes 422 error)
+</Warning>
+
+## Sample Output
+
+```json
+[
+  {
+    "id": "0x1a2b3c...",
+    "question": "Will Donald Trump win the 2024 Presidential Election?",
+    "slug": "will-donald-trump-win-2024-presidential-election",
+    "conditionId": "0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75",
+    "outcomePrices": "[\"0.62\",\"0.38\"]",
+    "volume": "125678945.50",
+    "liquidity": "2456789.30",
+    "active": true,
+    "closed": false,
+    "marketType": "binary",
+    "enableOrderBook": true
+  },
+  {
+    "id": "0x2b3c4d...",
+    "question": "Will Republicans win the Senate in 2024?",
+    "slug": "republicans-win-senate-2024",
+    "conditionId": "0x1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t1u2v3w4x5y6z7a8b9c0d1e2f",
+    "outcomePrices": "[\"0.71\",\"0.29\"]",
+    "volume": "45678912.20",
+    "liquidity": "987654.50",
+    "active": true,
+    "closed": false,
+    "marketType": "binary",
+    "enableOrderBook": true
+  }
+]
+```
+
+## Analyzing the Results
+
+### Key Fields
+
+**Market Identification:**
+- **question**: The market's prediction question
+- **slug**: URL-friendly identifier for direct lookups
+- **conditionId**: Required for holders, CLOB queries, and token IDs
+
+**Trading Activity:**
+- **volume**: Total trading volume in USDC (higher = more liquid)
+- **liquidity**: Available liquidity for orders
+- **outcomePrices**: Current YES/NO prices (remember to parse this JSON string)
+
+**Market Status:**
+- **active**: `true` if currently trading
+- **closed**: `true` if trading has ended
+- **marketType**: `binary` (YES/NO) or `categorical` (multi-outcome)
+
+### Interpreting Prices
+
+Prices represent the market's probability estimate:
+
+```python
+import json
+
+market = search_results[0]
+prices = json.loads(market['outcomePrices'])
+yes_price = float(prices[0])  # 0.62 = 62% probability
+no_price = float(prices[1])   # 0.38 = 38% probability
+
+print(f"Market implies {yes_price*100:.0f}% chance of YES")
+# Output: Market implies 62% chance of YES
+```
+
+<Note>
+Prices may sum to slightly more than 1.00 (e.g., 1.01) due to the 1% house vig. This is normal.
+</Note>
+
+## Filtering High-Volume Markets
+
+Find the top markets by volume without a keyword:
+
+```bash
+polymarket markets search "" --order volumeNum --limit 10
+```
+
+<Tip>
+Use an empty search string `""` to retrieve all markets sorted by your chosen criterion.
+</Tip>
+
+## Why Not `markets list`?
+
+<Warning>
+The `markets list` command always sorts **ascending** (lowest to highest), making it useless for finding top markets:
+
+```bash
+# ❌ Returns lowest-volume markets first
+polymarket markets list --limit 20
+
+# ✅ Use search with empty query instead
+polymarket markets search "" --order volumeNum --limit 20
+```
+</Warning>
+
+## Complete Research Workflow
+
+Here's a complete workflow for researching election markets:
+
+```bash Step 1: Search
+polymarket -o json markets search "2024 election" --order volumeNum --limit 5 > markets.json
+```
+
+```bash Step 2: Get detailed market data
+# Pick a slug from the search results
+polymarket -o json markets get will-donald-trump-win-2024-presidential-election > market_detail.json
+```
+
+```bash Step 3: Check top holders
+# Use the conditionId from market data
+polymarket -o json data holders 0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75 > holders.json
+```
+
+```bash Step 4: Get open interest
+polymarket data open-interest 0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75
+```
+
+## Sample Analysis Script
+
+Combine search with analysis in Python:
+
+```python
+import json
+import subprocess
+
+# Search for top markets
+result = subprocess.run(
+    ["polymarket", "-o", "json", "markets", "search", "",
+     "--order", "volumeNum", "--limit", "10"],
+    capture_output=True,
+    text=True
+)
+
+markets = json.loads(result.stdout)
+
+# Analyze each market
+for market in markets:
+    prices = json.loads(market['outcomePrices'])
+    yes_price = float(prices[0])
+    volume = float(market['volume'])
+    
+    print(f"\n{market['question']}")
+    print(f"  YES: {yes_price*100:.1f}%")
+    print(f"  Volume: ${volume:,.0f}")
+    print(f"  Liquidity: ${float(market['liquidity']):,.0f}")
+```
+
+## Next Steps
+
+After finding interesting markets:
+
+1. **Track price history** - Generate interactive charts (see [Price Tracking](/examples/price-tracking))
+2. **Analyze holders** - Find out who's betting on each outcome
+3. **Monitor events** - Look up multi-outcome events (see [Event Lookup](/examples/event-lookup))
+
+## Related Commands
+
+- [Event Lookup](/examples/event-lookup) - Get multi-outcome event data
+- [Price Tracking](/examples/price-tracking) - Create price charts
+- [CLI Reference](/cli/markets) - Full markets command documentation

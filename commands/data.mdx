@@ -1,0 +1,313 @@
+---
+title: Data
+description: Analyze holders, trades, portfolio values, and open interest
+---
+
+The `polymarket data` namespace provides commands for analyzing market participants, wallet activity, and market metrics.
+
+## Get top holders
+
+Retrieve the largest position holders for a market.
+
+```bash
+polymarket -o json data holders <CONDITION_ID>
+```
+
+<ParamField path="CONDITION_ID" type="string" required>
+  The hexadecimal condition ID from event or market data
+</ParamField>
+
+### Usage
+
+```bash
+polymarket -o json data holders 0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75
+```
+
+### Output structure
+
+```json
+[
+  {
+    "user_address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+    "outcome_index": 0,
+    "position_size": "12500.00",
+    "value_usd": 6500.00
+  },
+  {
+    "user_address": "0x8f38A0e2a3F7e6C63B3e9e9c7C15e3E2B1c6D9A8",
+    "outcome_index": 1,
+    "position_size": "8900.00",
+    "value_usd": 6764.00
+  }
+]
+```
+
+### Understanding outcome_index
+
+- `outcome_index: 0` = YES holders
+- `outcome_index: 1` = NO holders
+
+<Note>
+  Position sizes are in token units. Each token pays $1.00 if that outcome wins. The `value_usd` field shows current market value (position_size × current_price).
+</Note>
+
+### Use cases
+
+#### Find largest YES holders
+
+```python
+import json
+import subprocess
+
+result = subprocess.run(
+    ['polymarket', '-o', 'json', 'data', 'holders', CONDITION_ID],
+    capture_output=True,
+    text=True
+)
+holders = json.loads(result.stdout)
+yes_holders = [h for h in holders if h['outcome_index'] == 0]
+yes_holders.sort(key=lambda x: float(x['position_size']), reverse=True)
+
+print(f"Top YES holder: {yes_holders[0]['user_address']}")
+print(f"Position: {yes_holders[0]['position_size']} tokens")
+```
+
+#### Calculate total exposure
+
+```python
+yes_total = sum(float(h['position_size']) for h in holders if h['outcome_index'] == 0)
+no_total = sum(float(h['position_size']) for h in holders if h['outcome_index'] == 1)
+
+print(f"Total YES tokens: {yes_total:,.2f}")
+print(f"Total NO tokens: {no_total:,.2f}")
+```
+
+<Warning>
+  Some large holders are infrastructure wallets (e.g., Polymarket's neg-risk escrow contract), not individual traders. Always verify wallet activity before making assumptions.
+</Warning>
+
+## Get wallet trades
+
+Retrieve trading history for a specific wallet address.
+
+```bash
+polymarket -o json data trades <WALLET_ADDRESS> --limit <n>
+```
+
+<ParamField path="WALLET_ADDRESS" type="string" required>
+  The Ethereum wallet address (0x...)
+</ParamField>
+
+<ParamField path="--limit" type="number">
+  Maximum number of trades to return (default: 100, recommended: 500)
+</ParamField>
+
+### Usage
+
+```bash
+polymarket -o json data trades 0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb --limit 500
+```
+
+### Output structure
+
+```json
+[
+  {
+    "market": "Will Trump win 2024?",
+    "condition_id": "0xabc123...",
+    "outcome": "Yes",
+    "side": "BUY",
+    "size": "1000",
+    "price": "0.52",
+    "timestamp": 1698364800
+  },
+  {
+    "market": "Will Trump win 2024?",
+    "condition_id": "0xabc123...",
+    "outcome": "Yes",
+    "side": "SELL",
+    "size": "500",
+    "price": "0.58",
+    "timestamp": 1698451200
+  }
+]
+```
+
+### Cost basis calculation
+
+Calculate average entry price and current P&L for a specific market:
+
+```python
+import json
+import subprocess
+
+# Get wallet trades
+result = subprocess.run(
+    ['polymarket', '-o', 'json', 'data', 'trades', WALLET_ADDRESS, '--limit', '500'],
+    capture_output=True,
+    text=True
+)
+trades = json.loads(result.stdout)
+
+# Filter to specific market
+market_trades = [t for t in trades if t['condition_id'] == CONDITION_ID]
+
+# Calculate cost basis for BUY trades
+buys = [t for t in market_trades if t['side'] == 'BUY']
+total_cost = sum(float(t['size']) * float(t['price']) for t in buys)
+total_shares = sum(float(t['size']) for t in buys)
+avg_price = total_cost / total_shares if total_shares > 0 else 0
+
+# Calculate current value
+current_price = 0.62  # Get from market data
+shares_held = total_shares  # Adjust for sells if needed
+current_value = shares_held * current_price
+
+# Calculate P&L
+win_payout = shares_held * 1.00
+profit_if_win = win_payout - total_cost
+roi_if_win = (profit_if_win / total_cost) * 100 if total_cost > 0 else 0
+
+print(f"Total cost: ${total_cost:,.2f}")
+print(f"Shares held: {shares_held:,.2f}")
+print(f"Average price: ${avg_price:.4f}")
+print(f"Current value: ${current_value:,.2f}")
+print(f"Win payout: ${win_payout:,.2f}")
+print(f"ROI if win: {roi_if_win:.1f}%")
+```
+
+### Wallet profiling
+
+Detect infrastructure wallets vs actual traders:
+
+```bash
+polymarket -o json data trades 0xa5Ef39C3D3e10d0B270233af41CaC69796B12966 --limit 500
+```
+
+Infrastructure wallet signals:
+- Returns empty `[]` (no trades)
+- Only YIELD activity in on-chain history
+- Average price of $0 on all positions (tokens from CTF split, not purchased)
+- Identical token amounts across all outcomes
+- Very large portfolio value (billions)
+
+**Example:** `0xa5Ef39C3D3e10d0B270233af41CaC69796B12966` is Polymarket's neg-risk escrow contract (~$11.9B), not a bettor.
+
+## Get portfolio value
+
+Calculate total portfolio value for a wallet.
+
+```bash
+polymarket data value <WALLET_ADDRESS>
+```
+
+<ParamField path="WALLET_ADDRESS" type="string" required>
+  The Ethereum wallet address
+</ParamField>
+
+### Usage
+
+```bash
+polymarket data value 0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb
+```
+
+### Output
+
+```
+Total portfolio value: $45,678.90
+```
+
+This sums the current market value of all positions across all markets.
+
+<Note>
+  Portfolio value is calculated using current market prices, not potential win payouts. Actual payout depends on market resolution.
+</Note>
+
+## Get open interest
+
+Retrieve total open interest for a market.
+
+```bash
+polymarket data open-interest <CONDITION_ID>
+```
+
+<ParamField path="CONDITION_ID" type="string" required>
+  The hexadecimal condition ID from event or market data
+</ParamField>
+
+### Usage
+
+```bash
+polymarket data open-interest 0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75
+```
+
+### Output
+
+```
+Open interest: $1,234,567.89
+```
+
+<Warning>
+  In neg-risk markets, open interest is current-value-weighted, not face value. This means OI ≠ YES_tokens × $1.00. The calculation accounts for current market prices.
+</Warning>
+
+### Understanding open interest
+
+Open interest represents the total value locked in a market. It differs from volume:
+
+- **Volume**: Total amount traded (cumulative)
+- **Open Interest**: Current value of all outstanding positions
+
+High OI with low volume suggests holders are confident in their positions. High volume with low OI suggests frequent position turnover.
+
+## Complete analysis workflow
+
+Analyze a market and its top participants:
+
+```bash
+# 1. Get event and extract condition_id
+polymarket -o json events get democratic-presidential-nominee-2028
+
+# 2. Get open interest
+polymarket data open-interest 0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75
+
+# 3. Get top holders
+polymarket -o json data holders 0x0f49db97f71c68b1e42a6d16e3de93d85dbf7d4148e3f018eb79e88554be9f75
+
+# 4. Analyze top holder's trade history
+polymarket -o json data trades 0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb --limit 500
+
+# 5. Check their portfolio value
+polymarket data value 0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb
+```
+
+## Common use cases
+
+### Find whale positions
+
+Identify large holders who could move the market:
+
+```bash
+polymarket -o json data holders <CONDITION_ID> | jq '[.[] | select((.position_size | tonumber) > 10000)]'
+```
+
+### Track trader performance
+
+Analyze a wallet's historical trades to calculate realized and unrealized P&L across all markets.
+
+### Detect market manipulation
+
+Combine holder data with trade history to identify:
+- Wash trading (same address on both sides)
+- Coordinated buying/selling patterns
+- Unusual concentration among top holders
+
+### Monitor position changes
+
+Regularly poll `data holders` to track how whale positions shift over time:
+
+```bash
+watch -n 300 'polymarket -o json data holders <CONDITION_ID> | jq ".[:5]"'
+```
+
+Updates every 5 minutes, showing top 5 holders.
