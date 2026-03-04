@@ -1,0 +1,73 @@
+{
+  "projectType": "cli-tool",
+  "projectName": "Polymarket CLI Research Tool",
+  "projectDescription": "Codex skill for researching Polymarket prediction markets via the polymarket CLI with interactive price charts and wallet analysis.",
+  "theme": "aspen",
+  "primaryColor": "#2563eb",
+  "lightColor": "#3b82f6",
+  "darkColor": "#1e40af",
+  "navigation": {
+    "groups": [
+      {
+        "group": "Get Started",
+        "pages": [
+          "introduction",
+          "installation",
+          "quickstart"
+        ]
+      },
+      {
+        "group": "Core Commands",
+        "pages": [
+          "commands/events",
+          "commands/markets",
+          "commands/clob",
+          "commands/data"
+        ]
+      },
+      {
+        "group": "Workflows",
+        "pages": [
+          "workflows/charts",
+          "workflows/wallet-analysis",
+          "workflows/holder-analysis",
+          "workflows/cost-basis"
+        ]
+      },
+      {
+        "group": "Reference",
+        "pages": [
+          "reference/command-reference",
+          "reference/gotchas",
+          "reference/troubleshooting"
+        ]
+      },
+      {
+        "group": "Examples",
+        "pages": [
+          "examples/event-lookup",
+          "examples/market-research",
+          "examples/price-tracking"
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Event and market lookup via polymarket CLI",
+    "Interactive HTML price charts with time-window tabs",
+    "Wallet trade history and cost-basis analysis",
+    "Top YES/NO holder discovery",
+    "CLOB token ID resolution",
+    "Comprehensive troubleshooting guides"
+  ],
+  "publicApiSurface": [
+    "polymarket events get <slug>",
+    "polymarket markets get <slug>",
+    "polymarket clob market <condition_id>",
+    "polymarket clob price-history <token_id>",
+    "polymarket data holders <condition_id>",
+    "polymarket data trades <wallet_address>",
+    "polymarket markets search <query>",
+    "python3 scripts/chart.py <token_id>"
+  ]
+}
